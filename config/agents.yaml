@@ -1,0 +1,227 @@
+# DevTeam.AI Agent Configuration
+# All 15 agents with placeholder LLM configuration
+# Version: 1.0
+
+agents:
+  # Phase 1 - Orchestration
+  orchestrator:
+    name: "Orchestrator Agent"
+    role: "Dumb but reliable supervisor"
+    description: "Routes tasks to appropriate agents via LangGraph supervisor pattern"
+    approval_required: false
+    phase_introduced: 1
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.1
+      max_tokens: 4096
+
+  # Phase 2 - Cost Control
+  budget_guard:
+    name: "BudgetGuard Agent"
+    role: "Cost watchdog"
+    description: "Monitors spending, auto-downgrades models at thresholds, enforces budget limits"
+    approval_required: false
+    phase_introduced: 2
+    llm:
+      provider: "openai"
+      model: "gpt-4o-mini"
+      temperature: 0.0
+      max_tokens: 1024
+
+  # Phase 3 - Requirements
+  clarifying_pm:
+    name: "Clarifying PM Agent"
+    role: "Senior PM"
+    description: "Asks clarifying questions to transform vague ideas into clean PRDs"
+    approval_required: true
+    phase_introduced: 3
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.7
+      max_tokens: 8192
+
+  product_owner:
+    name: "Product Owner Agent"
+    role: "Mirror of user intent"
+    description: "Represents the human user's intent and priorities throughout development"
+    approval_required: false
+    phase_introduced: 3
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.5
+      max_tokens: 4096
+
+  # Phase 4 - Planning
+  solution_architect:
+    name: "Solution Architect Agent"
+    role: "Staff Engineer"
+    description: "Creates Architecture Decision Records (ADRs), makes major technical decisions"
+    approval_required: true  # Major trade-offs only
+    phase_introduced: 4
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.3
+      max_tokens: 8192
+
+  tech_lead:
+    name: "Tech Lead Agent"
+    role: "Engineering Manager"
+    description: "Breaks down architecture into actionable tasks, coordinates specialist agents"
+    approval_required: false
+    phase_introduced: 4
+    llm:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.4
+      max_tokens: 8192
+
+  # Phase 5 - Design
+  uiux_designer:
+    name: "UI/UX Designer Agent"
+    role: "Product Designer"
+    description: "Creates Tailwind design systems, component specs, and mockup PNGs"
+    approval_required: true
+    phase_introduced: 5
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.6
+      max_tokens: 8192
+
+  # Phase 6 - Specialist Implementation
+  frontend:
+    name: "Frontend Agent"
+    role: "Senior Frontend Engineer"
+    description: "Implements React/TypeScript UI components following design specs"
+    approval_required: true  # Final UI polish only
+    phase_introduced: 6
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.2
+      max_tokens: 16384
+
+  backend:
+    name: "Backend Agent"
+    role: "Senior Backend Engineer"
+    description: "Implements API endpoints, business logic, and server-side functionality"
+    approval_required: false
+    phase_introduced: 6
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.2
+      max_tokens: 16384
+
+  database:
+    name: "Database/Data Agent"
+    role: "Data Engineer + DBA"
+    description: "Designs schemas, writes migrations, optimizes queries"
+    approval_required: false
+    phase_introduced: 6
+    llm:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.1
+      max_tokens: 8192
+
+  ai_ml:
+    name: "AI/ML Agent"
+    role: "ML Engineer"
+    description: "Implements ML features, embeddings, fine-tuning when needed"
+    approval_required: true  # Fine-tuning only
+    phase_introduced: 6
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.3
+      max_tokens: 8192
+
+  # Phase 7 - Cross-Cutting Concerns
+  devops:
+    name: "DevOps/Infra Agent"
+    role: "SRE + Platform Engineer"
+    description: "Manages Docker, CI/CD, deployments, infrastructure as code"
+    approval_required: false
+    phase_introduced: 7
+    llm:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.1
+      max_tokens: 8192
+
+  security:
+    name: "Security Agent"
+    role: "AppSec Engineer"
+    description: "Performs security reviews, OWASP checks, vulnerability scanning"
+    approval_required: true  # High-risk only
+    phase_introduced: 7
+    llm:
+      provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      temperature: 0.1
+      max_tokens: 8192
+
+  qa_test:
+    name: "QA/Test Agent"
+    role: "QA Lead"
+    description: "Generates test suites, runs tests, ensures coverage targets"
+    approval_required: false
+    phase_introduced: 7
+    llm:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.2
+      max_tokens: 8192
+
+  technical_writer:
+    name: "Technical Writer Agent"
+    role: "Docs Engineer"
+    description: "Generates API docs, user guides, README updates"
+    approval_required: false
+    phase_introduced: 7
+    llm:
+      provider: "openai"
+      model: "gpt-4o-mini"
+      temperature: 0.5
+      max_tokens: 8192
+
+  # Phase 10 - Delivery
+  delivery_summarizer:
+    name: "Delivery Summarizer Agent"
+    role: "Scrum Master"
+    description: "Generates daily stand-up summaries, tracks progress metrics"
+    approval_required: false
+    phase_introduced: 10
+    llm:
+      provider: "openai"
+      model: "gpt-4o-mini"
+      temperature: 0.6
+      max_tokens: 4096
+
+# Budget thresholds (managed by BudgetGuard)
+budget:
+  default_limit: 200.0  # USD
+  thresholds:
+    log_only: 0.50      # 50%
+    notify_user: 0.75   # 75%
+    auto_downgrade: 0.85  # 85%
+    require_ack: 0.95   # 95%
+    hard_stop: 1.00     # 100%
+
+# Model downgrade paths for cost optimization
+downgrade_paths:
+  claude-3-5-sonnet-20241022: "claude-3-5-haiku-20241022"
+  gpt-4o: "gpt-4o-mini"
+  claude-3-5-haiku-20241022: "gpt-4o-mini"
+
+# Eco mode alternatives (open-source)
+eco_mode:
+  enabled: false
+  models:
+    default: "llama-3.1-405b"
+    fallback: "mistral-large-2"
