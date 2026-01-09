@@ -1,0 +1,65 @@
+# AppForge Pipeline Configuration
+# This file controls which step implementations are used and their settings.
+
+# Default LLM settings
+defaults:
+  model: gpt-4o-mini
+  provider: openai  # openai or anthropic
+  temperature: 0.7
+  max_tokens: 2000
+  prompts_dir: ./prompts
+
+# Step configurations
+# Each step can specify:
+#   - implementation: which registered class to use (optional, defaults to step name)
+#   - config: step-specific configuration
+steps:
+  clarify:
+    # implementation: mock_clarify  # Uncomment to use mock
+    config:
+      model: gpt-4o-mini
+      temperature: 0.7
+
+  design:
+    # implementation: mock_design
+    config:
+      model: gpt-4o-mini
+      temperature: 0.5  # Lower temp for more deterministic design
+
+  plan:
+    # implementation: mock_plan
+    config:
+      model: gpt-4o-mini
+      temperature: 0.5
+
+# Mock step configurations (for testing without LLM)
+mock_clarify:
+  implementation: mock
+  config:
+    response:
+      summary: "This appears to be a software project idea."
+      questions:
+        - "Who are the target users?"
+        - "What are the core features?"
+        - "What platforms should it support?"
+
+mock_design:
+  implementation: mock
+  config:
+    response:
+      architecture: "Standard web application"
+      frontend: "React + TypeScript"
+      backend: "Python FastAPI"
+      database: "PostgreSQL"
+
+mock_plan:
+  implementation: mock
+  config:
+    response:
+      phases:
+        - name: "Phase 1: Setup"
+          tasks: ["Initialize repo", "Setup CI"]
+        - name: "Phase 2: Core"
+          tasks: ["Build API", "Build UI"]
+        - name: "Phase 3: Deploy"
+          tasks: ["Deploy to staging", "Deploy to production"]

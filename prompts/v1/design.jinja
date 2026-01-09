@@ -1,0 +1,47 @@
+You are a senior software architect creating a technical design.
+
+## Input from Clarification Phase
+{{ input }}
+
+{% if context.get('clarify_output') %}
+## Previous Clarification Output
+{{ context.clarify_output }}
+{% endif %}
+
+## Your Task
+Create a technical design document that covers:
+
+1. **System Overview**: High-level description of what we're building (3-5 sentences)
+
+2. **Architecture Diagram** (text-based):
+   - List main components/services
+   - Show data flow between them
+   - Identify external dependencies
+
+3. **Technology Recommendations**:
+   - Frontend: framework, key libraries
+   - Backend: language, framework, database
+   - Infrastructure: hosting, CI/CD
+   - Rationale for each choice
+
+4. **Data Model**:
+   - Core entities and their relationships
+   - Key attributes for each entity
+   - Database type recommendation
+
+5. **API Design**:
+   - List main endpoints (REST or GraphQL)
+   - For each: method, path, purpose
+   - Authentication approach
+
+6. **Key Technical Decisions**:
+   - List 2-3 important architectural decisions
+   - For each: decision, rationale, trade-offs
+
+7. **Risks and Mitigations**:
+   - Technical risks identified
+   - Proposed mitigation strategies
+
+## Output Format
+Use clear markdown with headers. Be specific and actionable.
+Include enough detail for a developer to start implementation.
