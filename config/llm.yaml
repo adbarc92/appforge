@@ -1,0 +1,142 @@
+# DevTeam.AI - LLM Configuration
+# Phase 1: Skeleton configuration for LLM providers
+# Actual API calls will be enabled in Phase 3
+
+# Default provider settings
+defaults:
+  provider: anthropic
+  model: claude-3-5-sonnet-20241022
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 60  # seconds
+
+# Provider configurations
+providers:
+  anthropic:
+    # Claude models via Anthropic API
+    api_key_env: ANTHROPIC_API_KEY
+    base_url: https://api.anthropic.com
+    models:
+      claude-3-5-sonnet-20241022:
+        display_name: "Claude 3.5 Sonnet"
+        context_window: 200000
+        max_output: 8192
+        cost_per_1k_input: 0.003
+        cost_per_1k_output: 0.015
+        capabilities:
+          - reasoning
+          - coding
+          - analysis
+          - vision
+
+      claude-3-5-haiku-20241022:
+        display_name: "Claude 3.5 Haiku"
+        context_window: 200000
+        max_output: 8192
+        cost_per_1k_input: 0.001
+        cost_per_1k_output: 0.005
+        capabilities:
+          - reasoning
+          - coding
+          - fast_response
+
+  openai:
+    # GPT models via OpenAI API
+    api_key_env: OPENAI_API_KEY
+    base_url: https://api.openai.com/v1
+    models:
+      gpt-4o:
+        display_name: "GPT-4o"
+        context_window: 128000
+        max_output: 16384
+        cost_per_1k_input: 0.005
+        cost_per_1k_output: 0.015
+        capabilities:
+          - reasoning
+          - coding
+          - analysis
+          - vision
+
+      gpt-4o-mini:
+        display_name: "GPT-4o Mini"
+        context_window: 128000
+        max_output: 16384
+        cost_per_1k_input: 0.00015
+        cost_per_1k_output: 0.0006
+        capabilities:
+          - reasoning
+          - coding
+          - fast_response
+
+  ollama:
+    # Local models via Ollama (eco mode)
+    base_url: http://localhost:11434
+    models:
+      llama3.1:
+        display_name: "Llama 3.1 (Local)"
+        context_window: 128000
+        max_output: 4096
+        cost_per_1k_input: 0.0
+        cost_per_1k_output: 0.0
+        capabilities:
+          - reasoning
+          - coding
+
+      mistral:
+        display_name: "Mistral (Local)"
+        context_window: 32000
+        max_output: 4096
+        cost_per_1k_input: 0.0
+        cost_per_1k_output: 0.0
+        capabilities:
+          - reasoning
+          - coding
+
+# Agent-specific model assignments
+# These can be overridden per agent in agents.yaml
+agent_models:
+  # Quality-critical agents use best models
+  clarifying_pm: claude-3-5-sonnet-20241022
+  solution_architect: claude-3-5-sonnet-20241022
+  frontend: claude-3-5-sonnet-20241022
+  backend: claude-3-5-sonnet-20241022
+
+  # Support agents can use cheaper models
+  technical_writer: gpt-4o-mini
+  delivery_summarizer: gpt-4o-mini
+  budget_guard: gpt-4o-mini
+
+  # Default for unspecified agents
+  default: claude-3-5-sonnet-20241022
+
+# Fallback chain for failures
+fallback_chain:
+  - claude-3-5-sonnet-20241022
+  - gpt-4o
+  - claude-3-5-haiku-20241022
+  - gpt-4o-mini
+
+# Rate limiting settings
+rate_limits:
+  anthropic:
+    requests_per_minute: 60
+    tokens_per_minute: 100000
+  openai:
+    requests_per_minute: 60
+    tokens_per_minute: 150000
+
+# Retry settings
+retry:
+  max_attempts: 3
+  backoff_factor: 2.0
+  initial_delay: 1.0  # seconds
+
+# Observability
+tracing:
+  langsmith:
+    enabled: false
+    api_key_env: LANGSMITH_API_KEY
+    project: devteam-ai
+  opentelemetry:
+    enabled: false
+    endpoint: http://localhost:4317

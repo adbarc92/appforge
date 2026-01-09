@@ -18,9 +18,9 @@ DevTeam.AI transforms a natural-language product idea into a fully deployed appl
 
 ## Current Status
 
-**Phase 0: Repository Bootstrap** ✅
+**Phase 1: Minimal Viable Graph** ✅
 
-The foundation is in place. See [Roadmap](#roadmap) for upcoming phases.
+The LangGraph workflow is operational with state persistence. See [Roadmap](#roadmap) for upcoming phases.
 
 ## Quick Start
 
@@ -51,6 +51,21 @@ streamlit run app.py
 ```
 
 The application will open in your browser at `http://localhost:8501`.
+
+### Running with Claude Code
+
+You can interact with the workflow directly via Claude Code:
+
+```bash
+# Test the graph workflow
+python graph.py "Build a todo app"
+
+# Test the orchestrator
+python orchestrator.py "Build an e-commerce platform"
+
+# Run with Claude Code CLI (when available)
+claude -p "Test the DevTeam.AI workflow" --json
+```
 
 ### Environment Variables
 
@@ -93,12 +108,16 @@ mypy app.py
 devteam-ai-2025/
 ├── agents/              # Agent implementations (Phase 2+)
 ├── config/
-│   └── agents.yaml      # Agent configurations
+│   ├── agents.yaml      # Agent configurations
+│   └── llm.yaml         # LLM provider settings
 ├── prompts/
 │   └── v1/              # Versioned prompt templates
 ├── phases/              # Phase briefs and specs
 ├── tests/               # Test suite
+│   └── test_graph.py    # Graph workflow tests
 ├── app.py               # Streamlit entry point
+├── graph.py             # LangGraph workflow definition
+├── orchestrator.py      # Workflow orchestrator
 ├── requirements.txt     # Dependencies
 └── pyproject.toml       # Project configuration
 ```
@@ -108,8 +127,8 @@ devteam-ai-2025/
 | Phase | Milestone | Status |
 |-------|-----------|--------|
 | 0 | Repository Bootstrap | ✅ Complete |
-| 1 | Minimal Viable Graph | 🔜 Next |
-| 2 | Agent Framework + BudgetGuard | Planned |
+| 1 | Minimal Viable Graph | ✅ Complete |
+| 2 | Agent Framework + BudgetGuard | 🔜 Next |
 | 3 | Clarification Loop MVP | Planned |
 | 4 | Parallel Planning Sprint | Planned |
 | 5 | Memory & Persistence | Planned |

@@ -174,3 +174,20 @@ module = [
     "streamlit.*",
 ]
 ignore_missing_imports = true
+
+# UV configuration (alternative to pip)
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.7.0",
+    "black>=24.0.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "mypy>=1.11.0",
+]
+
+[tool.uv.sources]
+# Use PyPI for all dependencies
+langgraph = { index = "pypi" }
+crewai = { index = "pypi" }
+langchain = { index = "pypi" }
