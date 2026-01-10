@@ -59,6 +59,13 @@ When working on this codebase, always adhere to these core principles:
 - **Observability**: LangSmith + OpenTelemetry
 - **CI/CD**: GitHub Actions
 
+### Package Management
+- **Python**: UV (fast Python package manager)
+  - All dependencies defined in `pyproject.toml`
+  - Lock file: `uv.lock`
+  - Virtual environment managed by UV
+- **Node.js**: npm (standard package manager)
+
 ## Agent System Architecture
 
 ### The 15 Agents
@@ -153,8 +160,7 @@ devteam-ai/
 │   ├── tools/               # LangChain tools (GitHub, Vercel, etc.)
 │   ├── tests/               # pytest test suite
 │   ├── config.py           # Config + env vars
-│   ├── main.py             # FastAPI + Socket.IO server
-│   └── requirements.txt
+│   └── main.py             # FastAPI + Socket.IO server
 ├── ui/
 │   ├── src/
 │   │   ├── components/     # React components
@@ -196,6 +202,42 @@ devteam-ai/
 - **`components/ChatInterface.tsx`**: Chat UI for user interaction and system messages.
 
 ## Development Workflow
+
+### UV Package Management
+
+This project uses UV for Python dependency management. Key commands:
+
+```bash
+# Install dependencies
+uv sync
+
+# Install with dev dependencies
+uv sync --group dev
+
+# Add a new dependency
+uv add <package>
+
+# Add a dev dependency
+uv add --group dev <package>
+
+# Remove a dependency
+uv remove <package>
+
+# Run a command in the virtual environment
+uv run <command>
+
+# Run Python scripts
+uv run python script.py
+
+# Run pytest
+uv run pytest
+
+# Update all dependencies
+uv lock --upgrade
+uv sync
+```
+
+**Important**: Always use `uv run` to execute Python commands to ensure you're using the correct virtual environment.
 
 ### Phase-Based Development
 
@@ -362,18 +404,18 @@ Follow the testing pyramid defined in `testing-strategy.md`:
 ### Running Tests
 
 ```bash
-# All tests
-pytest -q --maxfail=1
+# All tests (using UV)
+uv run pytest -q --maxfail=1
 
 # With coverage
-pytest --cov=backend --cov-report=html
+uv run pytest --cov=backend --cov-report=html
 
 # Specific category
-pytest tests/unit/
-pytest tests/integration/
+uv run pytest tests/unit/
+uv run pytest tests/integration/
 
 # Phase-specific
-DEVTEAM_PHASE=3 pytest tests/regression/
+DEVTEAM_PHASE=3 uv run pytest tests/regression/
 ```
 
 ### Coverage Requirements

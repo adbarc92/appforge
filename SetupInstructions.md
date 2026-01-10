@@ -93,22 +93,26 @@ mkdir -p backend/{agents,orchestrator,api,prompts/v1,tools,tests}
 cd backend
 ```
 
-#### 2.2 Create `requirements.txt`
+#### 2.2 Initialize UV Environment
+
+This project uses UV for Python package management. Install UV first if you haven't:
+
+```bash
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-socketio==5.11.0
-langgraph==0.0.20
-langchain==0.1.0
-langchain-openai==0.0.5
-crewai==0.1.26
-redis==5.0.1
-pydantic==2.5.3
-python-dotenv==1.0.0
-pytest==7.4.4
-pytest-asyncio==0.23.3
-structlog==24.1.0
-httpx==0.26.0
+
+Then initialize the virtual environment and install dependencies:
+
+```bash
+# Create virtual environment and install dependencies
+uv sync
+
+# Or install with dev dependencies
+uv sync --group dev
 ```
 
 #### 2.3 Create `config.py`
@@ -386,14 +390,21 @@ if __name__ == "__main__":
 ```dockerfile
 FROM python:3.11-slim
 
+# Install UV
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency files
+COPY pyproject.toml uv.lock* ./
 
+# Install dependencies using UV
+RUN uv sync --frozen --no-dev
+
+# Copy application code
 COPY . .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 ```
 
 **`.env.example` and `.env`:**
