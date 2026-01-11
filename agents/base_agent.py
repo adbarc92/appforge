@@ -6,11 +6,15 @@ The InstrumentedAgent is the base class for all agents in the system.
 It provides:
 - Structured logging with agent context
 - Status emission for real-time UI updates
-- Standardized execute() interface
+- Standardized execute() interface with plan() and validate() hooks
 - Cost tracking hooks for BudgetGuard
 
 All agents MUST inherit from this class to ensure consistency
 and swappability (<10 lines to swap any agent).
+
+Authority Levels (from CoreSystemGlossary):
+- autonomous: Agent can proceed without human approval
+- approval_required: Agent must pause for human sign-off before proceeding
 """
 
 from abc import ABC, abstractmethod
@@ -21,8 +25,73 @@ from enum import Enum
 from typing import Any
 
 import structlog
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
+
+
+class Authority(str, Enum):
+    """Agent authority levels determining approval requirements."""
+
+    AUTONOMOUS = "autonomous"  # Can proceed without human approval
+    APPROVAL_REQUIRED = "approval_required"  # Must pause for human sign-off
+
+
+class LLMConfig(BaseModel):
+    """LLM configuration for an agent."""
+
+    provider: str = Field(description="LLM provider: anthropic, openai, ollama")
+    model: str = Field(description="Model identifier")
+    temperature: float = Field(default=0.5, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=4096, gt=0)
+
+
+class AgentConfig(BaseModel):
+    """
+    Pydantic configuration for an agent.
+
+    Loaded from config/agents.yaml and used to instantiate agents
+    via the registry. Enables hot-swapping with <10 LOC changes.
+    """
+
+    name: str = Field(description="Human-readable agent name")
+    role: str = Field(description="Agent's role in the team")
+    description: str = Field(description="What this agent does")
+    module: str = Field(
+        default="agents.base_agent",
+        description="Python module containing the agent class",
+    )
+    class_name: str = Field(
+        default="InstrumentedAgent",
+        description="Class name to instantiate",
+    )
+    prompt: str = Field(
+        default="",
+        description="Path to prompt template (e.g., prompts/v1/clarifying_pm.jinja)",
+    )
+    llm: LLMConfig = Field(description="LLM configuration")
+    enabled: bool = Field(default=True, description="Whether agent is active")
+    authority: Authority = Field(
+        default=Authority.AUTONOMOUS,
+        description="Whether agent requires human approval",
+    )
+    cost_tier: str = Field(
+        default="standard",
+        description="Cost tier: cheap, standard, expensive",
+    )
+    phase_introduced: int = Field(
+        default=1,
+        description="Roadmap phase when this agent is introduced",
+    )
+    approval_required: bool = Field(
+        default=False,
+        description="Shorthand for authority == APPROVAL_REQUIRED",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Sync authority with approval_required flag."""
+        if self.approval_required:
+            object.__setattr__(self, "authority", Authority.APPROVAL_REQUIRED)
 
 
 class AgentStatus(Enum):
@@ -165,6 +234,21 @@ class InstrumentedAgent(ABC):
             total_cost=self._total_cost,
         )
 
+    async def plan(self, task: AgentTask) -> dict[str, Any]:
+        """
+        Plan the execution before running.
+
+        Override this method to implement pre-execution planning.
+        Default implementation returns empty plan.
+
+        Args:
+            task: The task to plan for
+
+        Returns:
+            Plan dict with steps, estimated cost, etc.
+        """
+        return {"steps": [], "estimated_cost": 0.0, "requires_approval": False}
+
     @abstractmethod
     async def execute(self, task: AgentTask) -> AgentResult:
         """
@@ -180,12 +264,27 @@ class InstrumentedAgent(ABC):
         """
         raise NotImplementedError("Subclasses must implement execute()")
 
+    async def validate(self, result: AgentResult) -> bool:
+        """
+        Validate the execution result.
+
+        Override this method to implement post-execution validation.
+        Default implementation returns True if status is success.
+
+        Args:
+            result: The result from execute()
+
+        Returns:
+            True if result is valid, False otherwise
+        """
+        return result.success
+
     async def run(self, task: AgentTask) -> AgentResult:
         """
         Run the agent with full instrumentation.
 
-        This is the main entry point that wraps execute() with
-        logging, timing, and error handling.
+        This is the main entry point that wraps plan() -> execute() -> validate()
+        with logging, timing, and error handling.
 
         Args:
             task: The task to execute
@@ -199,7 +298,18 @@ class InstrumentedAgent(ABC):
         try:
             await self._emit_status(AgentStatus.RUNNING, task_type=task.task_type)
 
+            # Plan phase
+            plan = await self.plan(task)
+            self.logger.debug("agent.run.planned", plan=plan)
+
+            # Execute phase
             result = await self.execute(task)
+
+            # Validate phase
+            is_valid = await self.validate(result)
+            if not is_valid:
+                self.logger.warning("agent.run.validation_failed", result=result)
+                result.metadata["validation_failed"] = True
 
             # Calculate duration
             duration = (datetime.now() - self._start_time).total_seconds()

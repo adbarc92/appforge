@@ -1,0 +1,140 @@
+# DevTeam.AI Budget Configuration
+# Based on budget-enforcement-rules.md v1.0
+# Managed by BudgetGuard Agent
+
+budget:
+  currency: USD
+  hard_limit: 200.00
+
+  # Warning levels with escalating actions
+  warning_levels:
+    - threshold: 0.50
+      action: log_only
+      message: "50% budget consumed (${spent}/${limit})."
+
+    - threshold: 0.75
+      action: notify_user
+      message: "75% budget consumed. Consider switching to cheaper models."
+      recommendations:
+        - "Move clarifying_pm to gpt-4o-mini."
+        - "Run backend/database agents sequentially."
+
+    - threshold: 0.85
+      action: auto_downgrade
+      message: "85% consumed. Downgrading non-critical agents."
+      downgrade_rules:
+        # Specialist agents -> cheaper models
+        - agents:
+            - frontend
+            - backend
+            - database
+            - devops
+            - uiux_designer
+          model: claude-3-5-haiku-20241022
+        # Support agents -> mini models
+        - agents:
+            - qa_test
+            - technical_writer
+            - delivery_summarizer
+          model: gpt-4o-mini
+      # Critical agents that should NOT be downgraded:
+      # - clarifying_pm (quality-critical for requirements)
+      # - solution_architect (quality-critical for architecture)
+      # - orchestrator (minimal LLM usage)
+      # - budget_guard (minimal LLM usage)
+
+    - threshold: 0.95
+      action: require_ack
+      message: "95% consumed. Await `/approve_budget_override` to continue."
+      pause_orchestrator: true
+
+    - threshold: 1.00
+      action: hard_stop
+      message: "Budget exhausted. Workflow paused until new limit set."
+      required_decisions:
+        - increase_budget
+        - abort_phase
+        - switch_to_eco
+
+# Spend tracking configuration
+spend_tracking:
+  per_phase:
+    store: data/budget/phase_spend.json
+    fields:
+      - phase
+      - tokens_in
+      - tokens_out
+      - cost
+      - timestamp
+
+  per_agent:
+    store: data/budget/agent_spend.json
+    fields:
+      - agent_id
+      - invocation_count
+      - total_cost
+      - total_tokens
+
+  forecast:
+    rolling_average_phases: 3
+    flag_if_projection_exceeds: 1.05  # Warn if projected > 105% of limit
+
+# Notification settings
+notifications:
+  channel: chat  # Options: chat, email, webhook
+  include:
+    - current_spend
+    - projected_total
+    - agents_downgraded
+    - recommended_actions
+
+# Kill switch resume requirements
+kill_switch:
+  resume_command: "/approve_budget_override"
+  requirements:
+    - "User issues `/approve_budget_override reason`."
+    - "Orchestrator logs override in Design Ledger."
+    - "BudgetGuard resets projections with new limit."
+  max_overrides_per_project: 3
+
+# Model cost estimates (per 1K tokens)
+model_costs:
+  # Anthropic models
+  claude-3-5-sonnet-20241022:
+    input: 0.003
+    output: 0.015
+  claude-3-5-haiku-20241022:
+    input: 0.00025
+    output: 0.00125
+
+  # OpenAI models
+  gpt-4o:
+    input: 0.0025
+    output: 0.01
+  gpt-4o-mini:
+    input: 0.00015
+    output: 0.0006
+
+  # Local/eco models (free)
+  llama-3.1-405b:
+    input: 0.0
+    output: 0.0
+  mistral-large-2:
+    input: 0.0
+    output: 0.0
+
+# Eco mode settings
+eco_mode:
+  enabled: false
+  fallback_mappings:
+    claude-3-5-sonnet-20241022: llama-3.1-405b
+    claude-3-5-haiku-20241022: mistral-large-2
+    gpt-4o: llama-3.1-405b
+    gpt-4o-mini: mistral-large-2
+
+# Logging configuration
+logging:
+  budget_events: logs/budgetguard-{date}.jsonl
+  threshold_crossings: true
+  downgrade_events: true
+  override_events: true

@@ -18,9 +18,9 @@ DevTeam.AI transforms a natural-language product idea into a fully deployed appl
 
 ## Current Status
 
-**Phase 1: Minimal Viable Graph** ✅
+**Phase 2: Agent Framework + BudgetGuard** ✅
 
-The LangGraph workflow is operational with state persistence. See [Roadmap](#roadmap) for upcoming phases.
+The agent framework is complete with hot-swappable agents and BudgetGuard cost enforcement. See [Roadmap](#roadmap) for upcoming phases.
 
 ## Quick Start
 
@@ -84,6 +84,56 @@ LANGCHAIN_API_KEY=ls-...
 BUDGET_LIMIT=200.0
 ```
 
+## Swapping Agents
+
+DevTeam.AI supports hot-swapping agent implementations with less than 10 lines of configuration change.
+
+### Using the CLI
+
+```bash
+# List all registered agents
+python scripts/swap_agent.py --list
+
+# Show agent details
+python scripts/swap_agent.py --show frontend
+
+# Swap an agent (dry run first)
+python scripts/swap_agent.py --name frontend --module agent_stubs --class FrontendStub --dry-run
+
+# Apply the swap
+python scripts/swap_agent.py --name frontend --module agent_stubs --class FrontendStub
+
+# Reset to default implementation
+python scripts/swap_agent.py --reset frontend
+```
+
+### Programmatic Swapping
+
+```python
+from agents.registry import get_registry
+
+registry = get_registry()
+
+# Swap frontend agent to use a stub implementation
+registry.swap_agent(
+    agent_id="frontend",
+    module="agent_stubs",
+    class_name="FrontendStub"
+)
+```
+
+### Hot Reload
+
+Enable automatic hot-reload to pick up configuration changes without restarting:
+
+```python
+registry = AgentRegistry(
+    config_path="config/agents.yaml",
+    auto_reload=True,
+    reload_interval=5.0  # Check every 5 seconds
+)
+```
+
 ## Development
 
 ### Code Quality
@@ -98,6 +148,9 @@ black .
 # Run tests
 pytest tests/
 
+# Run Phase 2 tests specifically
+pytest tests/ -k "agent or budget"
+
 # Type checking
 mypy app.py
 ```
@@ -105,21 +158,29 @@ mypy app.py
 ### Project Structure
 
 ```
-devteam-ai-2025/
-├── agents/              # Agent implementations (Phase 2+)
+devteam-ai/
+├── agents/                    # Agent implementations
+│   ├── base_agent.py         # InstrumentedAgent base class
+│   ├── budget_guard.py       # BudgetGuard cost enforcement
+│   ├── mock_agent.py         # Mock agents for testing
+│   └── registry.py           # Agent registry with hot-reload
 ├── config/
-│   ├── agents.yaml      # Agent configurations
-│   └── llm.yaml         # LLM provider settings
+│   ├── agents.yaml           # Agent configurations (all 16 agents)
+│   ├── budget.yaml           # Budget thresholds and limits
+│   └── llm.yaml              # LLM provider settings
 ├── prompts/
-│   └── v1/              # Versioned prompt templates
-├── phases/              # Phase briefs and specs
-├── tests/               # Test suite
-│   └── test_graph.py    # Graph workflow tests
-├── app.py               # Streamlit entry point
-├── graph.py             # LangGraph workflow definition
-├── orchestrator.py      # Workflow orchestrator
-├── requirements.txt     # Dependencies
-└── pyproject.toml       # Project configuration
+│   └── v1/                   # Versioned prompt templates (16 agents)
+├── scripts/
+│   └── swap_agent.py         # CLI for swapping agent implementations
+├── phases/                   # Phase briefs and specs
+├── tests/
+│   ├── test_graph.py         # Graph workflow tests
+│   ├── test_agent_registry.py # Registry tests
+│   └── test_budget_guard.py  # BudgetGuard tests
+├── app.py                    # Streamlit entry point
+├── graph.py                  # LangGraph workflow definition
+├── orchestrator.py           # Workflow orchestrator
+└── pyproject.toml            # Project configuration (UV)
 ```
 
 ## Roadmap
@@ -128,7 +189,7 @@ devteam-ai-2025/
 |-------|-----------|--------|
 | 0 | Repository Bootstrap | ✅ Complete |
 | 1 | Minimal Viable Graph | ✅ Complete |
-| 2 | Agent Framework + BudgetGuard | 🔜 Next |
+| 2 | Agent Framework + BudgetGuard | ✅ Complete |
 | 3 | Clarification Loop MVP | Planned |
 | 4 | Parallel Planning Sprint | Planned |
 | 5 | Memory & Persistence | Planned |
