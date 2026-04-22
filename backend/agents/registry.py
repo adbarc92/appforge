@@ -237,7 +237,7 @@ class AgentRegistry:
                     using_fallback=True,
                 )
                 # Fallback: use MockAgent or raise
-                from agents.mock_agent import MockAgent
+                from backend.agents.mock_agent import MockAgent
 
                 agent_class = MockAgent
 
