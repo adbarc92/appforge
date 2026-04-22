@@ -1,6 +1,6 @@
 # Sub-Project #1 — Alignment + Phase 3 MVP
 
-**Status**: Design approved, pending implementation plan
+**Status**: Pending user review
 **Date**: 2026-04-21
 **Author**: DevTeam.AI maintainers
 
@@ -58,11 +58,11 @@ Rationale: the "cathedral" alternative (one big PR) risks long integration gaps 
 
 - **`main.py`** — FastAPI + `python-socketio` ASGI app. One process serves HTTP + WebSocket on `:8000`.
 - **`orchestrator.py`** — LangGraph supervisor with `SqliteSaver` checkpointer at `data/checkpoints.db`. Handles `interrupt_before` approval gates and `Command(resume=...)` resumption.
-- **`graph.py`** — LangGraph definition. State is a Pydantic `ProjectState`. Nodes: `clarifying_pm` (real), `product_owner_approval` (interrupt gate), `delivery_summarizer` (mock, emits "Phase 3 complete"). The other 12 mock agents exist in the registry for UI rendering but are not invoked in this sub-project's flow.
+- **`graph.py`** — LangGraph definition. State is a Pydantic `ProjectState` with fields: `idea: str`, `questions: list[Question]`, `answers: list[Answer]`, `prd: str | None`, `approval_status: str | None`, `approval_count: int` (rejection attempts, for escalation), `pending_input: str | None` (user messages queued while an agent is running), `current_phase: int`, `cost_so_far: float`. Nodes: `clarifying_pm` (real), `product_owner_approval` (interrupt gate), `delivery_summarizer` (mock, emits "Phase 3 complete"). The other 12 mock agents exist in the registry for UI rendering but are not invoked in this sub-project's flow.
 - **`agents/`** — existing Phase 2 code, moved under `backend/`. Registry, base class, BudgetGuard unchanged.
 - **`agents/clarifying_pm.py`** *(new)* — real implementation replacing the mock subclass, using `langchain_anthropic.ChatAnthropic(model='claude-sonnet-4-6')` with Pydantic structured output.
-- **`prompts.py`** *(new, small)* — Jinja2 prompt loader. `lru_cache` when `DEBUG=false`, bypass when `DEBUG=true`.
-- **`config.py`** — existing. Additions: `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`), `SQLITE_PATH` (default `data/checkpoints.db`), `MAX_CLARIFYING_QUESTIONS=6`.
+- **`prompt_loader.py`** *(new, small)* — Jinja2 prompt loader reading from the root-level `prompts/` directory. Named `prompt_loader.py` (not `prompts.py`) to avoid collision with the `prompts/` data directory. `lru_cache` when `DEBUG=false`, bypass when `DEBUG=true`.
+- **`config.py`** *(new)* — centralizes environment config. Reads env vars (`ANTHROPIC_API_KEY`, `MOCK_AGENTS`, `DEBUG`, `LOG_LEVEL`, `BUDGET_LIMIT`) and loads the root-level YAML (`config/agents.yaml`, `config/budget.yaml`, `config/llm.yaml`). Exposes: `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`), `SQLITE_PATH` (default `data/checkpoints.db`), `MAX_CLARIFYING_QUESTIONS=6`. Root-level `config/*.yaml` files stay where they are — only Python modules move under `backend/`.
 
 ### Frontend (`frontend/`)
 
@@ -85,6 +85,7 @@ Files:
 **Client → server**:
 - `start_project` — `{idea: string}`
 - `user_message` — `{project_id: string, text: string}`
+- `retry` — `{project_id: string}` (resumes from last checkpoint after a recoverable agent error)
 - `approve` / `reject` / `modify` — `{project_id: string, comment?: string}`
 - `load_project` — `{project_id: string}`
 
@@ -154,8 +155,8 @@ All per-project events scoped to a Socket.IO room named `project:<id>`.
 
 1. `ChatAnthropic` raises (rate limit, 5xx, timeout, auth, etc.).
 2. Agent catches, emits `agent_status: error`, returns `{status: 'error', error, recoverable: bool}`.
-3. Orchestrator catches error return, emits `agent_message` with friendly error + Retry button. Does not advance state. Checkpoint preserved.
-4. User clicks Retry → `user_message` with `{retry: true}` → orchestrator re-invokes the same node.
+3. Orchestrator catches error return, emits `agent_status: error` (with `details: recoverable_error_message`) and an `agent_message` with the friendly error text. Frontend sees the `error` status and renders a Retry button. Does not advance state. Checkpoint preserved.
+4. User clicks Retry → frontend emits `retry` event → orchestrator re-invokes the same node from the last checkpoint.
 5. If `recoverable: False` (auth error, missing key), orchestrator emits `phase_complete` with `status: 'failed'` and halts.
 
 ### Budget enforcement path
@@ -207,7 +208,8 @@ All per-project events scoped to a Socket.IO room named `project:<id>`.
 
 ### Startup checks
 
-- SQLite path writeable, `prompts/v1/clarifying_pm.jinja` loadable, `config/agents.yaml` parseable. Any failure → exit with clear message. Fail fast.
+- Local resources only: SQLite path writeable, `prompts/v1/clarifying_pm.jinja` loadable, `config/agents.yaml` parseable. Any failure → exit with clear message. Fail fast.
+- `ANTHROPIC_API_KEY` is **not** validated at startup (no ping to Anthropic on every boot). Missing or invalid key surfaces on the first real LLM call as the auth-error path above.
 
 ### Explicitly not handled
 
@@ -270,12 +272,16 @@ Current baseline: 79 passing tests. Sub-project #1 must not regress that.
 
 ## Cleanup decisions (part of Slice 1 and Slice 5)
 
+**Slice 1:**
 - **Delete** `app.py` (Streamlit).
 - **Delete** `SetupInstructions.md` (914 stale lines describing what this sub-project now actually builds).
-- **Archive** `gauntlite/` to a `research/gauntlite-archive` branch. Merge `gauntlite/Phase-3-PRD-Rubric-v1.md` into the Clarifying PM prompt template and into a new `docs/prd-rubric.md`.
-- **Remove** `crewai`, `mem0ai`, `gitpython` from `pyproject.toml`. They are declared but unused. Re-add when actually needed.
-- **Move** `agents/`, `orchestrator.py`, `graph.py` under a new `backend/` package. Update imports and test paths.
+- **Remove** `streamlit`, `crewai`, `mem0ai`, `gitpython` from `pyproject.toml` dependencies. They are declared but unused or being replaced. Re-add when actually needed. Run `uv lock` to refresh the lockfile.
+- **Move** `agents/`, `orchestrator.py`, `graph.py` under a new `backend/` package. Update imports in tests and any cross-file references. Root-level `config/` and `prompts/` directories stay where they are (they are data, not Python).
 - **Update** `CLAUDE.md` to match reality (FastAPI + React replaces Streamlit; Phase 2 status verified; Phase 3 status in progress).
+- **Update** `README.md` to reflect the new run commands (`uv run python -m backend.main` + `npm run dev`).
+
+**Slice 5:**
+- **Archive** `gauntlite/` to a `research/gauntlite-archive` branch, then remove from `main`. Merge `gauntlite/Phase-3-PRD-Rubric-v1.md` into the Clarifying PM prompt template and into a new `docs/prd-rubric.md`.
 
 ## Open questions / deferred decisions
 
