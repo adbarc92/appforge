@@ -24,7 +24,7 @@ from typing import Any
 import structlog
 import yaml
 
-from agents.base_agent import AgentConfig, InstrumentedAgent, LLMConfig
+from backend.agents.base_agent import AgentConfig, InstrumentedAgent, LLMConfig
 
 logger = structlog.get_logger(__name__)
 

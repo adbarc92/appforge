@@ -13,7 +13,7 @@ from typing import Any
 
 import structlog
 
-from agents.base_agent import (
+from backend.agents.base_agent import (
     AgentResult,
     AgentStatus,
     AgentTask,
