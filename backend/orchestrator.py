@@ -20,7 +20,7 @@ from typing import Any
 
 import structlog
 
-from graph import create_app, get_state, invoke_workflow
+from backend.graph import create_app, get_state, invoke_workflow
 
 # Configure structured logging
 logger = structlog.get_logger(__name__)
