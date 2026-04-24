@@ -4,7 +4,6 @@ import asyncio
 import pytest
 import socketio
 import uvicorn
-from contextlib import asynccontextmanager
 
 from backend.main import asgi_app
 
