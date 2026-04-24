@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agents.base_agent import AgentTask
-from agents.budget_guard import BudgetAction, BudgetGuard, BudgetState, SpendRecord
+from backend.agents.base_agent import AgentTask
+from backend.agents.budget_guard import BudgetAction, BudgetGuard, BudgetState, SpendRecord
 
 
 @pytest.fixture

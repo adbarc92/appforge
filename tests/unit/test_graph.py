@@ -11,7 +11,7 @@ Tests cover:
 
 import pytest
 
-from graph import (
+from backend.graph import (
     AppState,
     build_graph,
     clarify_node,
@@ -19,7 +19,7 @@ from graph import (
     get_state,
     invoke_workflow,
 )
-from orchestrator import Orchestrator, WorkflowResult, run_workflow
+from backend.orchestrator import Orchestrator, WorkflowResult, run_workflow
 
 
 class TestClarifyNode:

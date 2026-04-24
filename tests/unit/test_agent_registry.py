@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agents.base_agent import AgentConfig, AgentTask, InstrumentedAgent
-from agents.registry import AgentRegistry, get_registry, reset_registry
+from backend.agents.base_agent import AgentConfig, AgentTask, InstrumentedAgent
+from backend.agents.registry import AgentRegistry, get_registry, reset_registry
 
 
 @pytest.fixture
