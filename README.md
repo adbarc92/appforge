@@ -27,7 +27,7 @@ The agent framework is complete with hot-swappable agents and BudgetGuard cost e
 ### Prerequisites
 
 - Python 3.11 or higher
-- pip or uv package manager
+- [uv](https://github.com/astral-sh/uv) package manager
 
 ### Installation
 
@@ -36,36 +36,26 @@ The agent framework is complete with hot-swappable agents and BudgetGuard cost e
 git clone https://github.com/your-username/devteam-ai-2025.git
 cd devteam-ai-2025
 
-# Install in development mode
-pip install -e ".[dev]"
-
-# Or with uv (faster)
-uv pip install -e ".[dev]"
+# Install dependencies (creates virtual environment automatically)
+uv sync --group dev
 ```
 
-### Running the Application
+## Running locally (development)
+
+Backend (FastAPI + Socket.IO on `:8000`):
 
 ```bash
-# Start the Streamlit UI
-streamlit run app.py
+uv sync
+uv run -- python -m backend.main
 ```
 
-The application will open in your browser at `http://localhost:8501`.
-
-### Running with Claude Code
-
-You can interact with the workflow directly via Claude Code:
+Frontend (added in Slice 2 of sub-project #1; not yet present):
 
 ```bash
-# Test the graph workflow
-python graph.py "Build a todo app"
-
-# Test the orchestrator
-python orchestrator.py "Build an e-commerce platform"
-
-# Run with Claude Code CLI (when available)
-claude -p "Test the DevTeam.AI workflow" --json
+cd frontend && npm install && npm run dev
 ```
+
+Then open http://localhost:5173/
 
 ### Environment Variables
 
@@ -146,13 +136,10 @@ ruff check .
 black .
 
 # Run tests
-pytest tests/
+uv run -- python -m pytest tests/
 
 # Run Phase 2 tests specifically
-pytest tests/ -k "agent or budget"
-
-# Type checking
-mypy app.py
+uv run -- python -m pytest tests/ -k "agent or budget"
 ```
 
 ### Project Structure
@@ -177,7 +164,6 @@ devteam-ai/
 │   ├── test_graph.py         # Graph workflow tests
 │   ├── test_agent_registry.py # Registry tests
 │   └── test_budget_guard.py  # BudgetGuard tests
-├── app.py                    # Streamlit entry point
 ├── graph.py                  # LangGraph workflow definition
 ├── orchestrator.py           # Workflow orchestrator
 └── pyproject.toml            # Project configuration (UV)
@@ -236,7 +222,8 @@ devteam-ai/
 
 - **Orchestration**: LangGraph + CrewAI
 - **LLM Interface**: LangChain ChatModel
-- **UI**: Streamlit
+- **UI**: React 18 + TypeScript (Slice 2)
+- **API Server**: FastAPI + Socket.IO
 - **State**: SQLite (default) / Redis (optional)
 - **Vector Store**: Chroma / FAISS
 
