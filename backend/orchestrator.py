@@ -1,264 +1,189 @@
+"""Orchestrator: compiles the graph, runs it per project, and bridges to Socket.IO via emit callback.
+
+The orchestrator owns one asyncio task per project and a registry of pending
+interrupt resumes. It does NOT import Socket.IO -- the emit callable is
+injected by main.py.
 """
-DevTeam.AI - Orchestrator
-Phase 1: Pure Supervisor (No LLM)
+from __future__ import annotations
 
-The Orchestrator is responsible for routing tasks to the appropriate nodes
-in the workflow graph. In Phase 1, it's a simple supervisor that manages
-the clarification cycle. In future phases, it will coordinate all 16 agents.
+import asyncio
+import logging
+from dataclasses import is_dataclass
+from typing import Any, Awaitable, Callable
 
-Key responsibilities:
-- Route user ideas through the workflow
-- Manage state transitions
-- Handle approval gates (Phase 3+)
-- Coordinate parallel execution (Phase 4+)
-"""
+from backend.agents.registry import AgentRegistry
+from backend.config import Config
+from backend.graph import ProjectState, Question, build_graph
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+logger = logging.getLogger(__name__)
 
-import structlog
-
-from backend.graph import create_app, get_state, invoke_workflow
-
-# Configure structured logging
-logger = structlog.get_logger(__name__)
+EmitFn = Callable[[str, dict, str], Awaitable[None]]
 
 
-class WorkflowPhase(Enum):
-    """Workflow phases as defined in the roadmap."""
-
-    BOOTSTRAP = 0
-    MINIMAL_GRAPH = 1
-    AGENT_FRAMEWORK = 2
-    CLARIFICATION = 3
-    PLANNING = 4
-    DESIGN = 5
-    IMPLEMENTATION = 6
-    CROSS_CUTTING = 7
-    DEPLOYMENT = 8
-    ITERATION = 9
-    METRICS = 10
-    ECO_MODE = 11
-    PRODUCTION = 12
-    SELF_IMPROVEMENT = 13
-    TEMPLATE = 14
-
-
-class WorkflowStatus(Enum):
-    """Possible workflow statuses."""
-
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    PENDING_APPROVAL = "pending_approval"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    COMPLETE = "complete"
-    BLOCKED = "blocked"
-    ESCALATED = "escalated"
-    FAILED = "failed"
-    ROLLBACK = "rollback"
-
-
-@dataclass
-class WorkflowResult:
-    """Result from a workflow execution."""
-
-    success: bool
-    state: dict[str, Any]
-    thread_id: str
-    messages: list[str] = field(default_factory=list)
-    error: str | None = None
+def _result_field(result: Any, field: str, default: Any = None) -> Any:
+    """Read a field from an agent result that may be a dict or a dataclass/Pydantic model."""
+    if isinstance(result, dict):
+        return result.get(field, default)
+    return getattr(result, field, default)
 
 
 class Orchestrator:
-    """
-    Main orchestrator for DevTeam.AI workflow.
-
-    The Orchestrator is the "dumb but reliable supervisor" that routes
-    tasks through the workflow graph. It does NOT make decisions using
-    LLMs - that's the job of individual agents.
-
-    Attributes:
-        thread_id: Current thread ID for state persistence
-        emit_callback: Optional callback for real-time status updates
-    """
+    """Owns the per-project asyncio tasks and drives the LangGraph workflow."""
 
     def __init__(
         self,
-        thread_id: str = "default",
-        emit_callback: Callable[[str, dict], None] | None = None,
-    ):
+        mock_mode: bool | None = None,
+        config: Config | None = None,
+        registry: AgentRegistry | None = None,
+    ) -> None:
+        self.config = config or Config.load()
+        self.mock_mode = self.config.mock_agents if mock_mode is None else mock_mode
+        self.registry = registry or AgentRegistry()
+        self._tasks: dict[str, asyncio.Task[None]] = {}
+        self._pending_resume: dict[str, asyncio.Future[dict]] = {}
+
+    def _room(self, project_id: str) -> str:
+        return f"project:{project_id}"
+
+    async def run(self, project_id: str, idea: str, emit: EmitFn) -> None:
+        """Kick off a new workflow for the given project id.
+
+        Stored as an asyncio Task keyed by project_id. Callers can stop the task
+        via stop(). Resumption after an interrupt is driven by resume().
         """
-        Initialize the Orchestrator.
+        room = self._room(project_id)
+        await emit("agent_status", {"agent": "orchestrator", "status": "running"}, room)
 
-        Args:
-            thread_id: Thread ID for state persistence
-            emit_callback: Optional callback for emitting status updates
-        """
-        self.thread_id = thread_id
-        self.emit_callback = emit_callback
-        self._app = create_app()
+        clarifying_agent = self.registry.get_agent("clarifying_pm")
 
-        logger.info(
-            "orchestrator.initialized",
-            thread_id=thread_id,
-            has_emit_callback=emit_callback is not None,
-        )
+        async def clarifying_node(state: ProjectState) -> dict[str, Any]:
+            await emit(
+                "agent_status",
+                {"agent": "clarifying_pm", "status": "running"},
+                room,
+            )
+            result = await clarifying_agent.execute(
+                {
+                    "idea": state.idea,
+                    "questions": [q.model_dump() for q in state.questions],
+                    "answers": [a.model_dump() for a in state.answers],
+                    "mode": "mock" if self.mock_mode else "real",
+                }
+            )
+            if _result_field(result, "status") != "success":
+                await emit(
+                    "agent_status",
+                    {
+                        "agent": "clarifying_pm",
+                        "status": "error",
+                        "details": _result_field(result, "error"),
+                    },
+                    room,
+                )
+                raise RuntimeError(_result_field(result, "error", "clarifying_pm failed"))
 
-    async def _emit(self, event: str, data: dict) -> None:
-        """
-        Emit a status event.
-
-        Args:
-            event: Event name
-            data: Event data
-        """
-        if self.emit_callback:
-            try:
-                self.emit_callback(event, data)
-            except Exception as e:
-                logger.warning("orchestrator.emit_failed", event=event, error=str(e))
-
-    def run(self, idea: str) -> WorkflowResult:
-        """
-        Run the workflow with a user idea.
-
-        This is the main entry point for the orchestrator.
-
-        Args:
-            idea: The user's project idea
-
-        Returns:
-            WorkflowResult with execution details
-        """
-        logger.info("orchestrator.run.started", idea=idea, thread_id=self.thread_id)
-
-        try:
-            # Invoke the workflow
-            result = invoke_workflow(idea, thread_id=self.thread_id)
-
-            # Extract messages from result
-            messages = result.get("messages", [])
-            if messages:
-                # Convert message objects to strings if needed
-                messages = [
-                    str(m.content) if hasattr(m, "content") else str(m)
-                    for m in messages
+            artifact = _result_field(result, "artifact") or {}
+            update: dict[str, Any] = {}
+            if isinstance(artifact, dict):
+                question_text = artifact.get("question")
+                prd_text = artifact.get("prd")
+            else:
+                question_text = None
+                prd_text = None
+            if question_text:
+                await emit(
+                    "agent_message",
+                    {"agent": "clarifying_pm", "text": question_text},
+                    room,
+                )
+                update["questions"] = state.questions + [
+                    Question(text=question_text, index=len(state.questions))
                 ]
-
-            workflow_result = WorkflowResult(
-                success=True,
-                state=result,
-                thread_id=self.thread_id,
-                messages=messages,
+            if prd_text:
+                update["prd"] = prd_text
+            await emit(
+                "agent_status",
+                {"agent": "clarifying_pm", "status": "complete"},
+                room,
             )
+            return update
 
-            logger.info(
-                "orchestrator.run.completed",
-                thread_id=self.thread_id,
-                status=result.get("status"),
+        async def approval_node(state: ProjectState) -> dict[str, Any]:
+            decision = await self._await_resume(project_id)
+            return {
+                "approval_status": decision.get("decision", "rejected"),
+                "approval_count": state.approval_count
+                + (0 if decision.get("decision") == "approved" else 1),
+            }
+
+        async def summarizer_node(state: ProjectState) -> dict[str, Any]:
+            await emit(
+                "agent_status",
+                {"agent": "delivery_summarizer", "status": "running"},
+                room,
             )
-
-            return workflow_result
-
-        except Exception as e:
-            logger.error(
-                "orchestrator.run.failed",
-                thread_id=self.thread_id,
-                error=str(e),
+            await emit(
+                "phase_complete",
+                {"phase": 3, "summary": "PRD approved", "status": "success"},
+                room,
             )
-
-            return WorkflowResult(
-                success=False,
-                state={},
-                thread_id=self.thread_id,
-                error=str(e),
+            await emit(
+                "agent_status",
+                {"agent": "delivery_summarizer", "status": "complete"},
+                room,
             )
+            return {"current_phase": 4}
 
-    def get_current_state(self) -> dict | None:
-        """
-        Get the current persisted state.
-
-        Returns:
-            Current state dict or None if not found
-        """
-        return get_state(self.thread_id)
-
-    def resume(self) -> WorkflowResult | None:
-        """
-        Resume a paused workflow from persisted state.
-
-        Returns:
-            WorkflowResult if resumed successfully, None if no state found
-        """
-        state = self.get_current_state()
-        if not state:
-            logger.warning("orchestrator.resume.no_state", thread_id=self.thread_id)
-            return None
-
-        logger.info(
-            "orchestrator.resume.found_state",
-            thread_id=self.thread_id,
-            messages_count=len(state.get("messages", [])),
+        graph = build_graph(
+            checkpointer=None,  # SQLite checkpointer wired in Slice 5
+            clarifying_pm_node=clarifying_node,
+            approval_node=approval_node,
+            summarizer_node=summarizer_node,
         )
 
-        # Return the current state wrapped in a result
-        messages = state.get("messages", [])
-        if messages:
-            messages = [
-                str(m.content) if hasattr(m, "content") else str(m) for m in messages
-            ]
+        async def _driver() -> None:
+            try:
+                config_dict = {"configurable": {"thread_id": project_id}}
+                initial = ProjectState(idea=idea)
+                await graph.ainvoke(initial, config=config_dict)
+            except asyncio.CancelledError:
+                logger.info("orchestrator.run cancelled for %s", project_id)
+                raise
+            except Exception as exc:
+                logger.exception("orchestrator.run failed for %s", project_id)
+                await emit(
+                    "phase_complete",
+                    {
+                        "phase": 3,
+                        "summary": str(exc),
+                        "status": "failed",
+                        "reason": "exception",
+                    },
+                    room,
+                )
 
-        return WorkflowResult(
-            success=True,
-            state=state,
-            thread_id=self.thread_id,
-            messages=messages,
-        )
+        task = asyncio.create_task(_driver(), name=f"orchestrator:{project_id}")
+        self._tasks[project_id] = task
 
+    async def resume(self, project_id: str, decision: dict) -> None:
+        """Complete the pending interrupt future with the user's decision."""
+        fut = self._pending_resume.get(project_id)
+        if fut and not fut.done():
+            fut.set_result(decision)
 
-# Convenience function for simple invocations
-def run_workflow(idea: str, thread_id: str = "default") -> WorkflowResult:
-    """
-    Convenience function to run a workflow.
+    async def stop(self, project_id: str) -> None:
+        task = self._tasks.pop(project_id, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        fut = self._pending_resume.pop(project_id, None)
+        if fut and not fut.done():
+            fut.cancel()
 
-    Args:
-        idea: The user's project idea
-        thread_id: Thread ID for state persistence
-
-    Returns:
-        WorkflowResult with execution details
-    """
-    orchestrator = Orchestrator(thread_id=thread_id)
-    return orchestrator.run(idea)
-
-
-if __name__ == "__main__":
-    import sys
-
-    idea = sys.argv[1] if len(sys.argv) > 1 else "Build a task management app"
-    thread_id = sys.argv[2] if len(sys.argv) > 2 else "cli_test"
-
-    print("\n=== DevTeam.AI Orchestrator Test ===")
-    print(f"Idea: {idea}")
-    print(f"Thread: {thread_id}")
-    print()
-
-    result = run_workflow(idea, thread_id)
-
-    print(f"Success: {result.success}")
-    print(f"Messages: {result.messages}")
-    if result.error:
-        print(f"Error: {result.error}")
-    print()
-
-    # Test persistence by resuming
-    print("Testing resume from persisted state...")
-    orchestrator = Orchestrator(thread_id=thread_id)
-    resumed = orchestrator.resume()
-    if resumed:
-        print(f"Resumed messages: {resumed.messages}")
-    else:
-        print("No persisted state to resume")
+    async def _await_resume(self, project_id: str) -> dict:
+        fut: asyncio.Future[dict] = asyncio.get_running_loop().create_future()
+        self._pending_resume[project_id] = fut
+        return await fut
