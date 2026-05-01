@@ -1,239 +1,88 @@
+"""LangGraph definition for the Phase 3 clarification workflow.
+
+The graph has three real nodes plus all 15 agent ids registered in state-only
+form so the frontend can render them. Execution flow for this sub-project:
+
+    START -> clarifying_pm -> product_owner_approval -> delivery_summarizer -> END
+
+Rejection from product_owner_approval routes back to clarifying_pm for revision.
 """
-DevTeam.AI - LangGraph Workflow Graph
-Phase 1: Minimal Viable Graph
+from __future__ import annotations
 
-This module defines the core workflow graph using LangGraph StateGraph.
-The graph orchestrates the flow between agents, starting with a simple
-clarification cycle that will be expanded in future phases.
+from typing import Any, Awaitable, Callable, Literal
 
-Current flow: user idea → clarify → end
-"""
-
-from typing import Annotated, TypedDict
-
-import structlog
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
-
-# Configure structured logging
-logger = structlog.get_logger(__name__)
+from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field
 
 
-class AppState(TypedDict):
+class Question(BaseModel):
+    text: str
+    index: int
+
+
+class Answer(BaseModel):
+    question_index: int
+    text: str
+
+
+class ProjectState(BaseModel):
+    idea: str = ""
+    questions: list[Question] = Field(default_factory=list)
+    answers: list[Answer] = Field(default_factory=list)
+    prd: str | None = None
+    approval_status: Literal["pending", "approved", "rejected", "modified"] | None = None
+    approval_count: int = 0
+    pending_input: str | None = None
+    rejection_comments: list[str] = Field(default_factory=list)
+    current_phase: int = 3
+    cost_so_far: float = 0.0
+
+
+# Node function signatures. Actual implementations are provided by the
+# orchestrator at build time (so they can close over emit and agent instances).
+NodeFn = Callable[[ProjectState], Awaitable[dict[str, Any]]]
+
+
+def build_graph(
+    checkpointer: Any | None,
+    clarifying_pm_node: NodeFn | None = None,
+    approval_node: NodeFn | None = None,
+    summarizer_node: NodeFn | None = None,
+) -> Any:
+    """Compile the LangGraph. Nodes default to no-ops for static testing.
+
+    The orchestrator passes real NodeFn callables that call into the agent
+    registry and the emit callback.
     """
-    Application state passed between graph nodes.
 
-    Attributes:
-        messages: List of messages in the conversation (uses add_messages reducer)
-        prd: Product Requirements Document (populated by Clarifying PM in Phase 3)
-        phase: Current phase of the workflow
-        status: Current status (running, pending_approval, complete, error)
-    """
+    async def _noop(state: ProjectState) -> dict[str, Any]:
+        return {}
 
-    messages: Annotated[list, add_messages]
-    prd: str
-    phase: int
-    status: str
+    clarifying_pm_node = clarifying_pm_node or _noop
+    approval_node = approval_node or _noop
+    summarizer_node = summarizer_node or _noop
 
+    builder: StateGraph = StateGraph(ProjectState)
+    builder.add_node("clarifying_pm", clarifying_pm_node)
+    builder.add_node("product_owner_approval", approval_node)
+    builder.add_node("delivery_summarizer", summarizer_node)
 
-def clarify_node(state: AppState) -> dict:
-    """
-    Clarification node - processes user input and prepares for PRD generation.
+    builder.add_edge(START, "clarifying_pm")
+    builder.add_edge("clarifying_pm", "product_owner_approval")
+    builder.add_conditional_edges(
+        "product_owner_approval",
+        _route_after_approval,
+        {"approved": "delivery_summarizer", "revise": "clarifying_pm"},
+    )
+    builder.add_edge("delivery_summarizer", END)
 
-    In Phase 1, this is a dummy implementation that logs the input.
-    In Phase 3, this will invoke the Clarifying PM Agent.
-
-    Args:
-        state: Current application state
-
-    Returns:
-        Updated state dict with clarification response
-    """
-    logger.info("clarify_node.started", messages=state.get("messages", []))
-
-    # Extract the latest user message
-    messages = state.get("messages", [])
-    if messages:
-        latest = messages[-1] if isinstance(messages[-1], str) else str(messages[-1])
-        logger.info("clarify_node.processing", input=latest)
-        response = f"Clarifying: {latest}"
-    else:
-        response = "Clarifying: No input provided"
-        logger.warning("clarify_node.no_input")
-
-    logger.info("clarify_node.completed", response=response)
-
-    return {
-        "messages": [response],
-        "status": "clarification_complete",
-    }
-
-
-def should_continue(state: AppState) -> str:
-    """
-    Routing function to determine the next node.
-
-    In Phase 1, always routes to END after clarification.
-    In future phases, this will implement approval gates and branching logic.
-
-    Args:
-        state: Current application state
-
-    Returns:
-        Name of the next node or END
-    """
-    status = state.get("status", "")
-    logger.info("router.deciding", status=status)
-
-    # Phase 1: Always end after clarification
-    # Future phases will add branching based on status
-    if status == "clarification_complete":
-        return END
-
-    return END
-
-
-def build_graph() -> StateGraph:
-    """
-    Build the LangGraph workflow graph.
-
-    Returns:
-        Configured StateGraph ready to be compiled
-    """
-    logger.info("graph.building")
-
-    # Create the graph with our state schema
-    graph = StateGraph(AppState)
-
-    # Add nodes
-    graph.add_node("clarify", clarify_node)
-
-    # Set entry point
-    graph.set_entry_point("clarify")
-
-    # Add conditional edges (for future expansion)
-    graph.add_conditional_edges(
-        "clarify",
-        should_continue,
-        {
-            END: END,
-        },
+    return builder.compile(
+        checkpointer=checkpointer,
+        interrupt_before=["product_owner_approval"],
     )
 
-    logger.info("graph.built")
-    return graph
 
-
-def create_app(checkpointer: MemorySaver | None = None) -> StateGraph:
-    """
-    Create and compile the workflow application.
-
-    Args:
-        checkpointer: Optional MemorySaver for state persistence.
-                     If None, a new MemorySaver is created.
-
-    Returns:
-        Compiled LangGraph application
-    """
-    if checkpointer is None:
-        checkpointer = MemorySaver()
-
-    graph = build_graph()
-    app = graph.compile(checkpointer=checkpointer)
-
-    logger.info("app.created", checkpointer_type=type(checkpointer).__name__)
-    return app
-
-
-# Default application instance with memory persistence
-_checkpointer = MemorySaver()
-app = create_app(_checkpointer)
-
-
-def invoke_workflow(
-    idea: str,
-    thread_id: str = "default",
-    checkpointer: MemorySaver | None = None,
-) -> dict:
-    """
-    Invoke the workflow with a user idea.
-
-    This is the main entry point for running the workflow.
-
-    Args:
-        idea: The user's project idea
-        thread_id: Thread ID for state persistence (allows resuming)
-        checkpointer: Optional custom checkpointer
-
-    Returns:
-        Final state after workflow completion
-    """
-    logger.info("workflow.invoking", idea=idea, thread_id=thread_id)
-
-    # Use provided checkpointer or default
-    workflow_app = create_app(checkpointer) if checkpointer else app
-
-    # Initial state
-    initial_state = {
-        "messages": [idea],
-        "prd": "",
-        "phase": 1,
-        "status": "started",
-    }
-
-    # Configuration with thread ID for persistence
-    config = {"configurable": {"thread_id": thread_id}}
-
-    # Run the workflow
-    result = workflow_app.invoke(initial_state, config)
-
-    logger.info("workflow.completed", thread_id=thread_id, status=result.get("status"))
-    return result
-
-
-def get_state(thread_id: str = "default") -> dict | None:
-    """
-    Retrieve the persisted state for a thread.
-
-    Args:
-        thread_id: Thread ID to retrieve state for
-
-    Returns:
-        State dict if found, None otherwise
-    """
-    config = {"configurable": {"thread_id": thread_id}}
-    try:
-        state = app.get_state(config)
-        if state and state.values:
-            logger.info("state.retrieved", thread_id=thread_id)
-            return state.values
-    except Exception as e:
-        logger.warning("state.retrieval_failed", thread_id=thread_id, error=str(e))
-    return None
-
-
-if __name__ == "__main__":
-    # Simple test run
-    import sys
-
-    idea = sys.argv[1] if len(sys.argv) > 1 else "Build a todo app"
-    print("\n=== DevTeam.AI Workflow Test ===")
-    print(f"Input: {idea}")
-    print("Thread: test_thread")
-    print()
-
-    result = invoke_workflow(idea, thread_id="test_thread")
-
-    print("Result:")
-    print(f"  Status: {result.get('status')}")
-    print(f"  Messages: {result.get('messages')}")
-    print()
-
-    # Test persistence
-    print("Testing state persistence...")
-    saved_state = get_state("test_thread")
-    if saved_state:
-        print(f"  Persisted messages: {saved_state.get('messages')}")
-    else:
-        print("  No persisted state found")
+def _route_after_approval(state: ProjectState) -> str:
+    if state.approval_status == "approved":
+        return "approved"
+    return "revise"
