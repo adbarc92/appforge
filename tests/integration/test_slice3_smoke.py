@@ -57,3 +57,53 @@ async def test_idea_yields_project_and_mock_question(server_and_client):
     )
     assert messages, "expected at least one mock clarifying question"
     assert "Clarifying" in (messages[0].get("text") or "")
+
+
+@pytest.mark.asyncio
+async def test_answer_loop_advances_through_questions_to_prd(server_and_client):
+    _, client = server_and_client
+    project_created: list[dict] = []
+    messages: list[dict] = []
+    approval_required: list[dict] = []
+
+    client.on("project_created", lambda data: project_created.append(data))
+    client.on("agent_message", lambda data: messages.append(data))
+    client.on("approval_required", lambda data: approval_required.append(data))
+
+    await client.emit("start_project", {"idea": "build me a todo app"})
+
+    async def wait_for(predicate, timeout: float = 5.0) -> None:
+        steps = int(timeout / 0.05)
+        for _ in range(steps):
+            await asyncio.sleep(0.05)
+            if predicate():
+                return
+        raise AssertionError(f"timed out; messages={messages} approvals={approval_required}")
+
+    await wait_for(lambda: len(project_created) > 0)
+    project_id = project_created[0]["project_id"]
+
+    # Answer three mock questions, expecting each answer to unlock the next.
+    for expected in (1, 2, 3):
+        await wait_for(
+            lambda e=expected: any(f"#{e}?" in (m.get("text") or "") for m in messages)
+        )
+        await client.emit(
+            "user_message",
+            {"project_id": project_id, "text": f"answer {expected}"},
+        )
+
+    # After the third answer the mock returns a PRD via approval_required.
+    await wait_for(lambda: len(approval_required) > 0, timeout=6.0)
+    assert "# Mock PRD" in approval_required[0]["content"]
+
+    distinct = sorted(
+        {
+            m.get("text", "").split("?")[0].split("#")[-1].strip()
+            for m in messages
+            if "Clarifying question" in (m.get("text") or "")
+        }
+    )
+    assert distinct == ["1", "2", "3"], (
+        f"expected three distinct mock questions, got {distinct}: {messages}"
+    )

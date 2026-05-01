@@ -13,7 +13,7 @@ from typing import Any, Awaitable, Callable
 
 from backend.agents.registry import AgentRegistry
 from backend.config import Config
-from backend.graph import ProjectState, Question, build_graph
+from backend.graph import Answer, ProjectState, Question, build_graph
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,15 @@ class Orchestrator:
                 ]
             if prd_text:
                 update["prd"] = prd_text
+                await emit(
+                    "approval_required",
+                    {
+                        "phase": 3,
+                        "agent": "clarifying_pm",
+                        "content": prd_text,
+                    },
+                    room,
+                )
             await emit(
                 "agent_status",
                 {"agent": "clarifying_pm", "status": "complete"},
@@ -110,10 +119,37 @@ class Orchestrator:
 
         async def approval_node(state: ProjectState) -> dict[str, Any]:
             decision = await self._await_resume(project_id)
+
+            # Until the PRD is generated, the clarifying loop is still gathering
+            # answers. The user_message handler dispatches every chat input
+            # through resume() as {"answer": text}, so when prd is unset we
+            # treat the value as an answer to the most recent question and
+            # route back to clarifying_pm via approval_status="rejected".
+            if not state.prd:
+                answer_text = decision.get("answer", "").strip()
+                if answer_text and state.questions:
+                    new_answer = Answer(
+                        question_index=state.questions[-1].index,
+                        text=answer_text,
+                    )
+                    return {
+                        "answers": state.answers + [new_answer],
+                        "approval_status": "rejected",
+                        "approval_count": state.approval_count + 1,
+                    }
+                return {"approval_status": "rejected"}
+
+            # PRD exists -- this is a real approval gate. In Slice 5 the
+            # frontend will send {"decision": "approved" | "rejected"}; for the
+            # mock smoke any non-empty input approves the PRD.
+            decision_value = (
+                decision.get("decision")
+                or ("approved" if decision.get("answer", "").strip() else "rejected")
+            )
+            approved = decision_value == "approved"
             return {
-                "approval_status": decision.get("decision", "rejected"),
-                "approval_count": state.approval_count
-                + (0 if decision.get("decision") == "approved" else 1),
+                "approval_status": decision_value,
+                "approval_count": state.approval_count + (0 if approved else 1),
             }
 
         async def summarizer_node(state: ProjectState) -> dict[str, Any]:
@@ -146,11 +182,12 @@ class Orchestrator:
                 config_dict = {"configurable": {"thread_id": project_id}}
                 initial = ProjectState(idea=idea)
                 await graph.ainvoke(initial, config=config_dict)
+                logger.info("orchestrator.run completed for %s", project_id)
             except asyncio.CancelledError:
                 logger.info("orchestrator.run cancelled for %s", project_id)
                 raise
             except Exception as exc:
-                logger.exception("orchestrator.run failed for %s", project_id)
+                logger.exception("orchestrator.run failed for %s: %s", project_id, exc)
                 await emit(
                     "phase_complete",
                     {

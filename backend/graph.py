@@ -76,10 +76,16 @@ def build_graph(
     )
     builder.add_edge("delivery_summarizer", END)
 
-    return builder.compile(
-        checkpointer=checkpointer,
-        interrupt_before=["product_owner_approval"],
-    )
+    # interrupt_before requires a checkpointer to actually pause execution.
+    # In Slice 3 we have no checkpointer, so the orchestrator's approval_node
+    # blocks on a future via _await_resume; Slice 5 introduces SqliteSaver
+    # plus Command(resume=...) and re-adds interrupt_before then.
+    if checkpointer is not None:
+        return builder.compile(
+            checkpointer=checkpointer,
+            interrupt_before=["product_owner_approval"],
+        )
+    return builder.compile()
 
 
 def _route_after_approval(state: ProjectState) -> str:
