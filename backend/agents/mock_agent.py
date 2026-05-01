@@ -103,9 +103,34 @@ class BudgetGuardAgent(MockAgent):
 
 
 class ClarifyingPmAgent(MockAgent):
-    """Mock clarifying PM agent."""
+    """Mock clarifying PM agent.
 
-    pass
+    Returns the question/prd artifact shape expected by the orchestrator's
+    clarifying_node. Asks up to three mock questions, then emits a mock PRD.
+    """
+
+    async def execute(self, task: Any) -> dict[str, Any]:  # type: ignore[override]
+        task_dict = task if isinstance(task, dict) else {}
+        answered = len(task_dict.get("answers", []))
+        if answered < 3:
+            return {
+                "status": "success",
+                "artifact": {
+                    "question": f"[mock] Clarifying question #{answered + 1}?"
+                },
+                "cost": 0.0,
+            }
+        return {
+            "status": "success",
+            "artifact": {
+                "prd": (
+                    "# Mock PRD\n\n"
+                    "## Acceptance Criteria\n"
+                    "- [ ] build the thing\n"
+                )
+            },
+            "cost": 0.0,
+        }
 
 
 class ProductOwnerAgent(MockAgent):
