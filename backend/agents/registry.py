@@ -236,10 +236,12 @@ class AgentRegistry:
                     error=str(e),
                     using_fallback=True,
                 )
-                # Fallback: use MockAgent or raise
+                # Fallback: look for a same-named class in backend.agents.mock_agent
+                # (where Mock* subclasses live), otherwise fall back to base MockAgent.
+                from backend.agents import mock_agent as _mock_module
                 from backend.agents.mock_agent import MockAgent
 
-                agent_class = MockAgent
+                agent_class = getattr(_mock_module, config.class_name, MockAgent)
 
             # Create instance
             agent = agent_class(
