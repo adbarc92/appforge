@@ -1,5 +1,18 @@
 # CLAUDE.md - AI Assistant Context for DevTeam.AI
 
+<!-- BEGIN: ACTIVE-SESSION-PICKUP — remove this block when feat/alignment-phase3-mvp merges to main -->
+## Active session pickup
+
+If the current branch is `feat/alignment-phase3-mvp` (check with `git rev-parse --abbrev-ref HEAD`), read [`docs/Status-2026_05_03.md`](docs/Status-2026_05_03.md) before doing anything else. It documents:
+
+- where we are in [`docs/superpowers/plans/2026-04-21-alignment-phase3-mvp.md`](docs/superpowers/plans/2026-04-21-alignment-phase3-mvp.md) (Slice 3 done, Slice 4 is next),
+- four points where the plan drifted from the actual codebase (so the next session doesn't re-derive them),
+- two real bugs caught during smoke (LangGraph `interrupt_before` without a checkpointer; `approval_node` reading the wrong resume key),
+- a known limitation: browser reload resets project UI — fixed in Slice 5 via `SqliteSaver` hydration, not before.
+
+If the branch has changed, this section and the linked status doc are stale — skip them and delete this block.
+<!-- END: ACTIVE-SESSION-PICKUP -->
+
 ## Project Overview
 
 **DevTeam.AI** is a fully autonomous, parallel-first, iterative multi-agent system that replicates a 12-14 person modern software development team. The system takes a natural-language idea from a human user (acting as Product Owner) and orchestrates specialized AI agents to clarify requirements, design solutions, write code, test, deploy, and iterate until the product is shipped.
