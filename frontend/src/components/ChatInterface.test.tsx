@@ -32,4 +32,40 @@ describe("ChatInterface", () => {
       text: "build a todo app",
     });
   });
+
+  test("shows approval card when approvalPending is set", () => {
+    useProjectStore.getState().setApprovalPending({
+      agent: "product_owner", phase: 3, content: "# PRD",
+    });
+    render(<ChatInterface />);
+    expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /modify/i })).toBeInTheDocument();
+  });
+
+  test("clicking Approve emits approve event", () => {
+    useProjectStore.getState().setApprovalPending({
+      agent: "product_owner", phase: 3, content: "# PRD",
+    });
+    render(<ChatInterface />);
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+    expect(emit).toHaveBeenCalledWith("approve", {
+      project_id: "proj-1",
+      comment: undefined,
+    });
+  });
+
+  test("slash command /approve in input emits approve", () => {
+    useProjectStore.getState().setApprovalPending({
+      agent: "product_owner", phase: 3, content: "# PRD",
+    });
+    render(<ChatInterface />);
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "/approve" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(emit).toHaveBeenCalledWith("approve", {
+      project_id: "proj-1",
+      comment: undefined,
+    });
+  });
 });
