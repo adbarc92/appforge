@@ -10,6 +10,8 @@ Key Features:
 - Hot-reload configuration changes via timestamp watching
 - Swap any agent implementation in <10 LOC
 - Type-safe configuration via Pydantic models
+- Routes `clarifying_pm` to the real LLM-backed agent when MOCK_AGENTS=false,
+  and to the existing mock implementation otherwise.
 """
 
 import importlib
@@ -30,6 +32,25 @@ logger = structlog.get_logger(__name__)
 
 # Type alias for emit callback
 EmitCallback = Callable[[str, dict[str, Any]], Awaitable[None] | None]
+
+
+# Real (non-mock) implementations that the registry should prefer when
+# Config.mock_agents is False. The mapping is intentionally keyed by agent_id
+# rather than baked into the YAML so a single env-var flip (MOCK_AGENTS) flips
+# the whole system between mock and real modes without rewriting agents.yaml.
+#
+# Add an entry here whenever a new real agent ships. Until an entry exists,
+# the agent falls through to the YAML-driven module/class resolution (which
+# still works fine, including the Mock<Class> fallback in mock_agent).
+_REAL_AGENT_CLASSES: dict[str, tuple[str, str]] = {
+    "clarifying_pm": ("backend.agents.clarifying_pm", "ClarifyingPMAgent"),
+}
+
+
+def _mock_agents_enabled() -> bool:
+    """Read MOCK_AGENTS at call time so tests can monkeypatch env vars."""
+    raw = os.getenv("MOCK_AGENTS", "true")
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class AgentRegistry:
@@ -191,11 +212,70 @@ class AgentRegistry:
                 )
             return self._configs[agent_id]
 
+    def _resolve_agent_class(
+        self, agent_id: str, config: AgentConfig, mock: bool
+    ) -> type:
+        """Resolve the concrete class to instantiate for `agent_id`.
+
+        Selection order:
+        1. If `mock` is False and `agent_id` is in `_REAL_AGENT_CLASSES`,
+           import the real implementation.
+        2. Otherwise, honor whatever the YAML config says (module + class_name).
+        3. On import failure, fall back to the mock module: first a Mock*
+           subclass with the same `class_name`, then base `MockAgent`.
+
+        Args:
+            agent_id: Agent identifier
+            config: Loaded AgentConfig for this agent
+            mock: Whether to prefer the mock implementation
+
+        Returns:
+            The class to instantiate.
+        """
+        # Path 1: real implementation registered for this agent_id.
+        if not mock and agent_id in _REAL_AGENT_CLASSES:
+            module_name, class_name = _REAL_AGENT_CLASSES[agent_id]
+            try:
+                module = importlib.import_module(module_name)
+                return getattr(module, class_name)
+            except (ImportError, AttributeError) as e:
+                logger.warning(
+                    "registry.real_agent_import_failed",
+                    agent_id=agent_id,
+                    module=module_name,
+                    class_name=class_name,
+                    error=str(e),
+                    using_fallback=True,
+                )
+                # Fall through to YAML/mock resolution.
+
+        # Path 2: YAML-driven resolution (works for mock and for agents with
+        # no real implementation registered).
+        try:
+            module = importlib.import_module(config.module)
+            return getattr(module, config.class_name)
+        except (ImportError, AttributeError) as e:
+            logger.warning(
+                "registry.agent_import_failed",
+                agent_id=agent_id,
+                module=config.module,
+                class_name=config.class_name,
+                error=str(e),
+                using_fallback=True,
+            )
+            # Path 3: fallback to a Mock<Class> in mock_agent module, else
+            # base MockAgent. This preserves the prior behavior.
+            from backend.agents import mock_agent as _mock_module
+            from backend.agents.mock_agent import MockAgent
+
+            return getattr(_mock_module, config.class_name, MockAgent)
+
     def get_agent(
         self,
         agent_id: str,
         emit_callback: EmitCallback | None = None,
         force_reload: bool = False,
+        mock: bool | None = None,
     ) -> InstrumentedAgent:
         """
         Get or create an agent instance.
@@ -204,6 +284,9 @@ class AgentRegistry:
             agent_id: Agent identifier
             emit_callback: Callback for status emissions
             force_reload: Force re-instantiation even if cached
+            mock: If provided, overrides the MOCK_AGENTS env var for this
+                call. `True` forces the mock implementation, `False` forces
+                the real one (if registered in `_REAL_AGENT_CLASSES`).
 
         Returns:
             Instantiated agent
@@ -217,43 +300,56 @@ class AgentRegistry:
             if self.auto_reload:
                 self._check_reload()
 
-            # Return cached instance if available
-            if not force_reload and agent_id in self._instances:
-                return self._instances[agent_id]
+            use_mock = _mock_agents_enabled() if mock is None else mock
+
+            # Cache key includes mock-mode so flipping the env var picks up a
+            # freshly instantiated agent of the right class on the next call.
+            cache_key = f"{agent_id}:{'mock' if use_mock else 'real'}"
+
+            if not force_reload and cache_key in self._instances:
+                return self._instances[cache_key]
 
             config = self.get_config(agent_id)
+            agent_class = self._resolve_agent_class(agent_id, config, use_mock)
 
-            # Dynamically import and instantiate the agent
-            try:
-                module = importlib.import_module(config.module)
-                agent_class = getattr(module, config.class_name)
-            except (ImportError, AttributeError) as e:
-                logger.warning(
-                    "registry.agent_import_failed",
-                    agent_id=agent_id,
-                    module=config.module,
-                    class_name=config.class_name,
-                    error=str(e),
-                    using_fallback=True,
-                )
-                # Fallback: look for a same-named class in backend.agents.mock_agent
-                # (where Mock* subclasses live), otherwise fall back to base MockAgent.
-                from backend.agents import mock_agent as _mock_module
-                from backend.agents.mock_agent import MockAgent
-
-                agent_class = getattr(_mock_module, config.class_name, MockAgent)
-
-            # Create instance
+            # Create instance. All agents accept (name, emit_callback, config);
+            # real agents that need extra kwargs (e.g. a custom model) pull
+            # them out of `config` themselves.
             agent = agent_class(
                 name=agent_id,
                 emit_callback=emit_callback,
                 config=config.model_dump(),
             )
 
-            self._instances[agent_id] = agent
-            logger.debug("registry.agent_instantiated", agent_id=agent_id)
+            self._instances[cache_key] = agent
+            logger.debug(
+                "registry.agent_instantiated",
+                agent_id=agent_id,
+                mock=use_mock,
+                class_name=agent_class.__name__,
+            )
 
             return agent
+
+    def get(
+        self,
+        agent_id: str,
+        mock: bool | None = None,
+        emit_callback: EmitCallback | None = None,
+    ) -> InstrumentedAgent:
+        """Shorthand for `get_agent` matching the plan's `registry.get(name, mock=...)` contract.
+
+        Args:
+            agent_id: Agent identifier (e.g. "clarifying_pm").
+            mock: Override the MOCK_AGENTS env var. When False, returns the
+                real agent implementation if one is registered; when True,
+                always returns the mock.
+            emit_callback: Optional emit callback forwarded to the agent.
+
+        Returns:
+            Agent instance.
+        """
+        return self.get_agent(agent_id, emit_callback=emit_callback, mock=mock)
 
     def swap_agent(
         self,
@@ -288,9 +384,9 @@ class AgentRegistry:
             new_config_dict["class_name"] = class_name
             self._configs[agent_id] = AgentConfig(**new_config_dict)
 
-            # Clear cached instance
-            if agent_id in self._instances:
-                del self._instances[agent_id]
+            # Clear cached instances for this agent (both mock and real keys).
+            for key in [k for k in self._instances if k.startswith(f"{agent_id}:")]:
+                del self._instances[key]
 
             logger.info(
                 "registry.agent_swapped",
