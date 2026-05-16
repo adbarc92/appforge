@@ -11,6 +11,7 @@ import logging
 from dataclasses import is_dataclass
 from typing import Any, Awaitable, Callable
 
+from backend.agents.budget_guard import BudgetGuard
 from backend.agents.registry import AgentRegistry
 from backend.config import Config
 from backend.graph import Answer, ProjectState, Question, build_graph
@@ -18,6 +19,12 @@ from backend.graph import Answer, ProjectState, Question, build_graph
 logger = logging.getLogger(__name__)
 
 EmitFn = Callable[[str, dict, str], Awaitable[None]]
+
+# Per the Phase 3 plan (Task 4.4), the clarifying_pm agent does not yet report
+# real token costs (its result has cost=0.0). Use a small placeholder so the
+# budget bookkeeping still exercises the can_spend / record_spend path end to
+# end. When the real LLM cost is plumbed through, drop this constant.
+_CLARIFYING_COST_ESTIMATE = 0.05
 
 
 def _result_field(result: Any, field: str, default: Any = None) -> Any:
@@ -35,10 +42,16 @@ class Orchestrator:
         mock_mode: bool | None = None,
         config: Config | None = None,
         registry: AgentRegistry | None = None,
+        budget_guard: BudgetGuard | None = None,
     ) -> None:
         self.config = config or Config.load()
         self.mock_mode = self.config.mock_agents if mock_mode is None else mock_mode
         self.registry = registry or AgentRegistry()
+        # BudgetGuard is a long-lived per-orchestrator collaborator. We use its
+        # defaults (loads config/budget.yaml when present, otherwise uses the
+        # built-in $200 limit). Callers may inject a configured instance for
+        # testing.
+        self.budget_guard = budget_guard or BudgetGuard()
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._pending_resume: dict[str, asyncio.Future[dict]] = {}
 
@@ -57,6 +70,22 @@ class Orchestrator:
         clarifying_agent = self.registry.get_agent("clarifying_pm")
 
         async def clarifying_node(state: ProjectState) -> dict[str, Any]:
+            # Budget gate: refuse to call the agent if even the cheap placeholder
+            # estimate would breach the hard limit (or the 95% require-ack tier).
+            can_proceed, reason = self.budget_guard.can_spend(_CLARIFYING_COST_ESTIMATE)
+            if not can_proceed:
+                await emit(
+                    "agent_status",
+                    {
+                        "agent": "clarifying_pm",
+                        "status": "error",
+                        "details": "budget_exceeded",
+                        "reason": reason,
+                    },
+                    room,
+                )
+                raise RuntimeError("Budget hard stop before clarifying_pm")
+
             await emit(
                 "agent_status",
                 {"agent": "clarifying_pm", "status": "running"},
@@ -81,6 +110,30 @@ class Orchestrator:
                     room,
                 )
                 raise RuntimeError(_result_field(result, "error", "clarifying_pm failed"))
+
+            # Record actual spend and notify the UI if a threshold tier changed.
+            # BudgetGuard exposes the highest crossed threshold as a float on
+            # state.current_threshold (0.0, 0.5, 0.75, 0.85, 0.95, or 1.0); we
+            # treat changes to that value as the "threshold_pct changed" signal
+            # described in the plan.
+            actual_cost = float(_result_field(result, "cost", 0.0) or 0.0)
+            prev_threshold = self.budget_guard.state.current_threshold
+            self.budget_guard.record_spend(
+                agent_id="clarifying_pm",
+                cost=actual_cost,
+                phase=3,
+            )
+            new_threshold = self.budget_guard.state.current_threshold
+            if new_threshold != prev_threshold:
+                await emit(
+                    "budget_update",
+                    {
+                        "spent": self.budget_guard.state.total_spent,
+                        "limit": self.budget_guard.state.hard_limit,
+                        "threshold": new_threshold,
+                    },
+                    room,
+                )
 
             artifact = _result_field(result, "artifact") or {}
             update: dict[str, Any] = {}
