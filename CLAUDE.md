@@ -41,13 +41,13 @@ When working on this codebase, always adhere to these core principles:
 
 ### Backend
 - **Framework**: FastAPI + Uvicorn
-- **Orchestration**: LangGraph v1.0 (supervisor pattern) + CrewAI v0.5 (agent framework)
-- **Agent Base**: CrewAI + Pydantic for structured outputs
-- **LLM Interface**: LangChain ChatModel abstraction
+- **Orchestration**: LangGraph v1.0 (supervisor pattern). _CrewAI is planned but not currently wired in._
+- **Agent Base**: custom `InstrumentedAgent` + Pydantic for structured outputs
+- **LLM Interface**: Anthropic SDK directly (LangChain ChatModel abstraction remains an option for future providers)
 - **Real-time Communication**: Socket.IO for bidirectional events
-- **State Management**: LangGraph checkpoints + Mem0 for agent memory
-- **Vector Store**: Chroma/FAISS (local) ↔ Pinecone (cloud)
-- **Caching**: Redis (optional, SQLite default)
+- **State Management**: LangGraph checkpoints (`SqliteSaver`) for cross-session persistence
+- **Vector Store**: Chroma/FAISS (local) ↔ Pinecone (cloud) _(planned, not yet used)_
+- **Persistence**: SQLite (`SQLITE_PATH`, default `./data/checkpoints.sqlite`)
 - **Logging**: structlog with JSON output
 - **Testing**: pytest + pytest-asyncio
 
@@ -62,9 +62,9 @@ When working on this codebase, always adhere to these core principles:
 - **Icons**: lucide-react
 
 ### LLM Models
-- **Default (Quality)**: GPT-4o, Claude 3.5 Sonnet
-- **Cost-Optimized**: GPT-4o-mini, Claude Haiku 3.5
-- **Open-Source (Eco Mode)**: Llama 3.1 405B, Mistral Large 2 (via Ollama/vLLM)
+- **Default (Quality)**: Claude 3.5 Sonnet (`ANTHROPIC_MODEL`), GPT-4o (planned alt provider)
+- **Cost-Optimized**: Claude Haiku 3.5, GPT-4o-mini
+- **Open-Source (Eco Mode)**: Llama 3.1 405B, Mistral Large 2 (via Ollama/vLLM) _(planned)_
 
 ### Infrastructure
 - **Containerization**: Docker + Docker Compose
@@ -135,7 +135,7 @@ class InstrumentedAgent:
 
 ### Agent Registry Pattern
 
-Agents are registered in `agents/registry.py`:
+Agents are registered in `backend/agents/registry.py`:
 
 ```python
 AGENT_CONFIGS = {
@@ -151,7 +151,7 @@ def create_agent(name: str, emit_callback: Callable) -> Any:
 ```
 
 **To add a new agent**:
-1. Create class in `agents/` inheriting from `InstrumentedAgent`
+1. Create class in `backend/agents/` inheriting from `InstrumentedAgent`
 2. Add entry to `AGENT_CONFIGS` dict
 3. Update `AGENT_REGISTRY`
 4. Add prompts to `/prompts/v1/{agent_name}/`
@@ -164,17 +164,15 @@ devteam-ai/
 │   ├── agents/              # Agent implementations
 │   │   ├── base_agent.py   # InstrumentedAgent base class
 │   │   ├── mock_agent.py   # Configurable mock for testing
+│   │   ├── clarifying_pm.py # Phase 3 PM agent (real Anthropic calls)
 │   │   └── registry.py     # Agent factory + configs
-│   ├── orchestrator/        # LangGraph supervisor logic
+│   ├── orchestrator.py      # LangGraph supervisor + workflow
+│   ├── prompt_loader.py     # Jinja2 prompt loader (hot-reloadable)
 │   ├── api/                 # REST endpoints (if needed)
-│   ├── prompts/             # Versioned prompt templates
-│   │   ├── v1/             # Current version
-│   │   └── v2/             # Future A/B tests
 │   ├── tools/               # LangChain tools (GitHub, Vercel, etc.)
-│   ├── tests/               # pytest test suite
 │   ├── config.py           # Config + env vars
-│   └── main.py             # FastAPI + Socket.IO server
-├── ui/
+│   └── main.py             # FastAPI + Socket.IO server entry point
+├── frontend/
 │   ├── src/
 │   │   ├── components/     # React components
 │   │   │   ├── GraphCanvas.tsx    # React Flow visualization
@@ -187,6 +185,10 @@ devteam-ai/
 │   │   └── types/
 │   │       └── index.ts          # TypeScript types
 │   └── package.json
+├── prompts/                 # Versioned prompt templates
+│   ├── v1/                 # Current version
+│   └── v2/                 # Future A/B tests
+├── tests/                   # pytest test suite
 ├── docs/                    # Design docs (you are here)
 │   ├── CoreDesignDocument.md
 │   ├── Roadmap.md
@@ -200,19 +202,22 @@ devteam-ai/
 
 ### Backend
 
-- **`main.py`**: FastAPI app + Socket.IO server. Entry point for all real-time events.
-- **`config.py`**: Configuration via environment variables. All env vars use `Config` class.
-- **`agents/registry.py`**: Single source of truth for available agents. Modify here to add/remove agents.
-- **`agents/base_agent.py`**: Base class for all agents. Provides `execute()` interface and `_emit_status()` helper.
-- **`agents/mock_agent.py`**: Configurable mock agent for testing. Supports delay, success rate, and error simulation.
+- **`backend/main.py`**: FastAPI app + Socket.IO server. Entry point for all real-time events.
+- **`backend/config.py`**: Configuration via environment variables. All env vars use `Config` class.
+- **`backend/orchestrator.py`**: LangGraph supervisor — defines the workflow graph (clarifier → approval → next phase), wires `SqliteSaver` checkpointing, and runs the per-project state machine.
+- **`backend/prompt_loader.py`**: Loads Jinja2 prompts from `prompts/v{N}/`, supports hot-reload when `DEBUG=true`.
+- **`backend/agents/registry.py`**: Single source of truth for available agents. Modify here to add/remove agents.
+- **`backend/agents/base_agent.py`**: Base class for all agents. Provides `execute()` interface and `_emit_status()` helper.
+- **`backend/agents/clarifying_pm.py`**: Phase 3 Clarifying PM agent. Calls Anthropic, asks follow-up questions, emits PRD + `approval_required` events.
+- **`backend/agents/mock_agent.py`**: Configurable mock agent for testing. Supports delay, success rate, and error simulation.
 
 ### Frontend
 
-- **`stores/projectStore.ts`**: Zustand store managing all project state (nodes, messages, approvals, budget).
-- **`hooks/useSocket.ts`**: Socket.IO hook that connects to backend and updates Zustand store based on events.
-- **`components/GraphCanvas.tsx`**: React Flow visualization of agent workflow.
-- **`components/AgentNode.tsx`**: Visual representation of individual agent (color-coded by status).
-- **`components/ChatInterface.tsx`**: Chat UI for user interaction and system messages.
+- **`frontend/src/stores/projectStore.ts`**: Zustand store managing all project state (nodes, messages, approvals, budget).
+- **`frontend/src/hooks/useSocket.ts`**: Socket.IO hook that connects to backend and updates Zustand store based on events.
+- **`frontend/src/components/GraphCanvas.tsx`**: React Flow visualization of agent workflow.
+- **`frontend/src/components/AgentNode.tsx`**: Visual representation of individual agent (color-coded by status).
+- **`frontend/src/components/ChatInterface.tsx`**: Chat UI for user interaction and system messages.
 
 ## Development Workflow
 
@@ -252,6 +257,23 @@ uv sync
 
 **Important**: Always use `uv run` to execute Python commands to ensure you're using the correct virtual environment.
 
+### Running the Stack Locally
+
+Backend (FastAPI + Socket.IO on `:8000`):
+
+```bash
+uv sync
+uv run -- python -m backend.main
+```
+
+Frontend (Vite dev server on `:5173`):
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+Then open <http://localhost:5173/>.
+
 ### Phase-Based Development
 
 DevTeam.AI follows a 15-phase roadmap (see Roadmap.md). Each phase:
@@ -260,7 +282,7 @@ DevTeam.AI follows a 15-phase roadmap (see Roadmap.md). Each phase:
 3. May require human approval before advancing
 4. Is tracked in `Status-YYYY_MM_DD.md` docs
 
-**Current implementation is Phase 1-2 foundation**. When adding features:
+**Current implementation: Phase 2 verified, Phase 3 MVP in progress** on `feat/alignment-phase3-mvp`. When adding features:
 - Check which phase it belongs to
 - Ensure prior phase tests still pass
 - Add new tests to `tests/` matching the phase number
@@ -298,17 +320,19 @@ All configuration in `.env`:
 ENV=development              # development | production
 DEBUG=true                   # Enable debug logging
 
-# Infrastructure
-REDIS_URL=redis://redis:6379 # Redis for state (optional, uses SQLite if missing)
+# Persistence
+SQLITE_PATH=./data/checkpoints.sqlite  # LangGraph SqliteSaver checkpoint DB
 
 # Agent Behavior
-MOCK_AGENTS=true            # Use mock agents (no real LLM calls)
-SLOW_MODE=false             # Add artificial delays for testing
-FORCE_ERRORS=false          # Force random agent failures
+MOCK_AGENTS=true                # Use mock agents (no real LLM calls)
+SLOW_MODE=false                 # Add artificial delays for testing
+FORCE_ERRORS=false              # Force random agent failures
+MAX_CLARIFYING_QUESTIONS=5      # Cap follow-up questions before forcing a PRD
 
 # LLM API Keys
-OPENAI_API_KEY=sk-...       # Required for GPT models
-ANTHROPIC_API_KEY=sk-...    # Required for Claude models
+OPENAI_API_KEY=sk-...           # Optional (alt provider, not used in MVP)
+ANTHROPIC_API_KEY=sk-ant-...    # Required for Claude models
+ANTHROPIC_MODEL=claude-3-5-sonnet-latest  # Default model id for agent calls
 
 # Budget
 BUDGET_LIMIT=200.0          # Hard spending limit in USD
@@ -407,7 +431,7 @@ Follow the testing pyramid defined in `testing-strategy.md`:
    - Automated via Regression Agent (Phase 7+)
 
 4. **End-to-End Tests** (`tests/e2e/`)
-   - Full Streamlit session with scripted commands
+   - Full browser session driving the React UI with scripted commands
    - Required from Phase 6 onward
 
 5. **Thought-Experiment Tests** (manual)
@@ -517,33 +541,33 @@ Nodes in `GraphCanvas.tsx` must have `id` matching agent registry:
 ```
 
 ### 7. LangGraph State
-LangGraph state is ephemeral unless checkpoints enabled:
+LangGraph state is ephemeral unless checkpoints enabled. The orchestrator wires `SqliteSaver` so project state survives reconnect/reload:
 ```python
-# Required for memory across sessions
-from langgraph.checkpoint.memory import MemorySaver
-checkpointer = MemorySaver()  # or SQLite/Redis
+# backend/orchestrator.py
+from langgraph.checkpoint.sqlite import SqliteSaver
+checkpointer = SqliteSaver.from_conn_string(config.SQLITE_PATH)
 ```
 
 ## Roadmap Context
 
-### Current State (Phase 1-2)
+### Current State (Phase 2 verified, Phase 3 MVP in progress)
 
 The codebase currently implements:
-- ✅ Basic FastAPI + Socket.IO server
+- ✅ FastAPI + Socket.IO server (`backend/main.py`)
 - ✅ Mock agent system with configurable delays/failures
-- ✅ React + Zustand frontend with graph visualization
+- ✅ React + Zustand frontend with graph visualization (`frontend/`)
 - ✅ Real-time status updates via Socket.IO
-- ✅ Agent registry pattern
-- ⚠️ BudgetGuard (spec exists, not implemented)
-- ⚠️ Orchestrator (basic workflow only)
+- ✅ Agent registry pattern with hot-swap (Phase 2)
+- ✅ BudgetGuard agent (Phase 2 — verified)
+- 🚧 Clarifying PM Agent with real Anthropic calls (Phase 3 MVP — landing on `feat/alignment-phase3-mvp`)
+- 🚧 LangGraph orchestrator with `SqliteSaver` persistence (Slice 5)
 
-### Next Priorities (Phase 3-4)
+### Next Priorities (Phase 3-4 finish)
 
-- Implement clarification loop (Clarifying PM Agent)
+- Land Slice 4 (frontend approval card) and Slice 5 (`SqliteSaver` hydration) for the MVP
 - Add parallel planning (Solution Architect + Tech Lead)
-- Integrate real LLM calls (OpenAI/Anthropic)
-- Add prompt versioning system
-- Implement memory/persistence (SQLite checkpoints)
+- Add prompt versioning system polish
+- Extend persistence (multi-project, multi-user)
 
 ### Long-Term (Phase 5-14)
 
@@ -595,14 +619,13 @@ The codebase currently implements:
 
 ### Required API Keys
 
-- **OpenAI**: `OPENAI_API_KEY` - For GPT-4o, GPT-4o-mini models
-- **Anthropic**: `ANTHROPIC_API_KEY` - For Claude 3.5 Sonnet, Haiku
+- **Anthropic**: `ANTHROPIC_API_KEY` - For Claude 3.5 Sonnet, Haiku (default provider)
+- **OpenAI** (optional): `OPENAI_API_KEY` - For GPT-4o, GPT-4o-mini (alt provider, planned)
 - **LangSmith** (optional): For tracing and debugging
 - **Pinecone** (optional): For cloud vector store
 
 ### Optional Services
 
-- **Redis**: For distributed state (default: SQLite)
 - **Ollama/vLLM**: For local LLM inference (eco mode)
 - **Vercel**: For preview deployments (Phase 8+)
 - **GitHub**: For code repository management (Phase 6+)
@@ -611,10 +634,9 @@ The codebase currently implements:
 
 Key architectural decisions documented in `CoreDesignDocument.md`:
 
-1. **Why LangGraph + CrewAI hybrid?**
-   - LangGraph for orchestration (supervisor pattern, state management)
-   - CrewAI for agent framework (tools, structured outputs)
-   - Best of both: reliable orchestration + rich agent capabilities
+1. **Why LangGraph?**
+   - LangGraph for orchestration (supervisor pattern, state management, checkpoints)
+   - CrewAI was originally planned as the agent framework but isn't wired in yet; the current `InstrumentedAgent` base is sufficient for Phase 3
 
 2. **Why external prompts?**
    - Enable A/B testing without code changes
@@ -626,10 +648,10 @@ Key architectural decisions documented in `CoreDesignDocument.md`:
    - Users need predictable, capped spending
    - Auto-downgrades prevent surprises
 
-4. **Why SQLite default instead of Redis?**
+4. **Why SQLite for checkpoints?**
    - Single-user use case doesn't need distributed state
    - Easier local development
-   - Redis optional for multi-user deployments
+   - `SqliteSaver` is built into LangGraph
 
 5. **Why Socket.IO instead of SSE or WebSockets?**
    - Bidirectional communication needed (user commands)
@@ -689,7 +711,7 @@ budget_guard.record_spend(actual_cost)
 
 - **LangChain Docs**: https://python.langchain.com/
 - **LangGraph Docs**: https://langchain-ai.github.io/langgraph/
-- **CrewAI Docs**: https://docs.crewai.com/
+- **Anthropic Python SDK**: https://github.com/anthropics/anthropic-sdk-python
 - **FastAPI Docs**: https://fastapi.tiangolo.com/
 - **React Flow Docs**: https://reactflow.dev/
 - **Socket.IO Docs**: https://socket.io/docs/v4/
@@ -705,7 +727,7 @@ budget_guard.record_spend(actual_cost)
 
 ---
 
-**Last Updated**: 2025-12-30
-**Document Version**: 1.0
+**Last Updated**: 2026-05-16
+**Document Version**: 1.1
 **Target Audience**: AI coding assistants (Claude, GPT, etc.)
 **Maintained By**: Project maintainers

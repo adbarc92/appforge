@@ -13,14 +13,30 @@ DevTeam.AI transforms a natural-language product idea into a fully deployed appl
 - **Human-in-the-Loop Gates**: Strategic approval points ensure quality without micromanagement
 - **Budget Control**: BudgetGuard agent enforces spending limits with automatic model downgrades
 - **Swappable Components**: Every agent, LLM provider, and prompt can be swapped with minimal code changes
-- **Hybrid LLM Support**: Use proprietary models (GPT-4o, Claude 3.5 Sonnet) or open-source alternatives (Llama 3.1, Mistral)
+- **Hybrid LLM Support**: Use proprietary models (Claude 3.5 Sonnet, GPT-4o) or open-source alternatives (Llama 3.1, Mistral)
 - **External Prompts**: All prompts live in versioned directories for easy iteration and A/B testing
 
 ## Current Status
 
-**Phase 2: Agent Framework + BudgetGuard** ✅
+**Phase 2: Agent Framework + BudgetGuard** — verified
+**Phase 3: Clarification Loop MVP** — in progress on `feat/alignment-phase3-mvp`
 
-The agent framework is complete with hot-swappable agents and BudgetGuard cost enforcement. See [Roadmap](#roadmap) for upcoming phases.
+See [Roadmap](#roadmap) for upcoming phases.
+
+## Design docs
+
+Active sub-project (Phase 3 MVP + alignment):
+
+- Spec: [`docs/superpowers/specs/2026-04-21-alignment-phase3-mvp-design.md`](docs/superpowers/specs/2026-04-21-alignment-phase3-mvp-design.md)
+- Plan: [`docs/superpowers/plans/2026-04-21-alignment-phase3-mvp.md`](docs/superpowers/plans/2026-04-21-alignment-phase3-mvp.md)
+
+Foundational:
+
+- [Core Design Document](docs/CoreDesignDocument.md)
+- [Roadmap Details](docs/Roadmap.md)
+- [Approval Gate Protocol](docs/approval-gate-protocol.md)
+- [Budget Enforcement Rules](docs/budget-enforcement-rules.md)
+- [Testing Strategy](docs/testing-strategy.md)
 
 ## Quick Start
 
@@ -28,6 +44,7 @@ The agent framework is complete with hot-swappable agents and BudgetGuard cost e
 
 - Python 3.11 or higher
 - [uv](https://github.com/astral-sh/uv) package manager
+- Node.js 20+ and npm (for the frontend)
 
 ### Installation
 
@@ -36,7 +53,7 @@ The agent framework is complete with hot-swappable agents and BudgetGuard cost e
 git clone https://github.com/your-username/devteam-ai-2025.git
 cd devteam-ai-2025
 
-# Install dependencies (creates virtual environment automatically)
+# Install Python dependencies (creates virtual environment automatically)
 uv sync --group dev
 ```
 
@@ -49,22 +66,31 @@ uv sync
 uv run -- python -m backend.main
 ```
 
-Frontend (added in Slice 2 of sub-project #1; not yet present):
+Frontend (Vite dev server on `:5173`):
 
 ```bash
 cd frontend && npm install && npm run dev
 ```
 
-Then open http://localhost:5173/
+Then open <http://localhost:5173/>.
 
 ### Environment Variables
 
 Create a `.env` file in the project root:
 
 ```bash
-# Required for LLM integration (Phase 3+)
-OPENAI_API_KEY=sk-...
+# Required for the Phase 3 Clarifying PM agent
 ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-3-5-sonnet-latest
+
+# Optional alt provider
+OPENAI_API_KEY=sk-...
+
+# Persistence (LangGraph SqliteSaver)
+SQLITE_PATH=./data/checkpoints.sqlite
+
+# Clarifier guardrail
+MAX_CLARIFYING_QUESTIONS=5
 
 # Optional: LangSmith for tracing
 LANGCHAIN_TRACING_V2=true
@@ -100,7 +126,7 @@ python scripts/swap_agent.py --reset frontend
 ### Programmatic Swapping
 
 ```python
-from agents.registry import get_registry
+from backend.agents.registry import get_registry
 
 registry = get_registry()
 
@@ -130,43 +156,50 @@ registry = AgentRegistry(
 
 ```bash
 # Run linter
-ruff check .
+uv run -- ruff check .
 
 # Run formatter
-black .
+uv run -- black .
 
-# Run tests
+# Run all tests
 uv run -- python -m pytest tests/
 
 # Run Phase 2 tests specifically
 uv run -- python -m pytest tests/ -k "agent or budget"
+
+# Frontend tests
+cd frontend && npm test
 ```
 
 ### Project Structure
 
 ```
 devteam-ai/
-├── agents/                    # Agent implementations
-│   ├── base_agent.py         # InstrumentedAgent base class
-│   ├── budget_guard.py       # BudgetGuard cost enforcement
-│   ├── mock_agent.py         # Mock agents for testing
-│   └── registry.py           # Agent registry with hot-reload
+├── backend/                   # FastAPI + Socket.IO server
+│   ├── agents/                # Agent implementations
+│   │   ├── base_agent.py      # InstrumentedAgent base class
+│   │   ├── budget_guard.py    # BudgetGuard cost enforcement
+│   │   ├── clarifying_pm.py   # Phase 3 PM agent (real Anthropic calls)
+│   │   ├── mock_agent.py      # Mock agents for testing
+│   │   └── registry.py        # Agent registry with hot-reload
+│   ├── orchestrator.py        # LangGraph workflow + SqliteSaver checkpoints
+│   ├── prompt_loader.py       # Jinja2 prompt loader
+│   ├── config.py              # Settings (env vars)
+│   └── main.py                # ASGI app entry point
+├── frontend/                  # React 18 + Vite + Zustand
+│   ├── src/
+│   └── package.json
 ├── config/
-│   ├── agents.yaml           # Agent configurations (all 16 agents)
-│   ├── budget.yaml           # Budget thresholds and limits
-│   └── llm.yaml              # LLM provider settings
+│   ├── agents.yaml            # Agent configurations (all 16 agents)
+│   ├── budget.yaml            # Budget thresholds and limits
+│   └── llm.yaml               # LLM provider settings
 ├── prompts/
-│   └── v1/                   # Versioned prompt templates (16 agents)
+│   └── v1/                    # Versioned prompt templates (16 agents)
 ├── scripts/
-│   └── swap_agent.py         # CLI for swapping agent implementations
-├── phases/                   # Phase briefs and specs
-├── tests/
-│   ├── test_graph.py         # Graph workflow tests
-│   ├── test_agent_registry.py # Registry tests
-│   └── test_budget_guard.py  # BudgetGuard tests
-├── graph.py                  # LangGraph workflow definition
-├── orchestrator.py           # Workflow orchestrator
-└── pyproject.toml            # Project configuration (UV)
+│   └── swap_agent.py          # CLI for swapping agent implementations
+├── phases/                    # Phase briefs and specs
+├── tests/                     # pytest suite
+└── pyproject.toml             # Project configuration (UV)
 ```
 
 ## Roadmap
@@ -176,7 +209,7 @@ devteam-ai/
 | 0 | Repository Bootstrap | ✅ Complete |
 | 1 | Minimal Viable Graph | ✅ Complete |
 | 2 | Agent Framework + BudgetGuard | ✅ Complete |
-| 3 | Clarification Loop MVP | Planned |
+| 3 | Clarification Loop MVP | 🚧 In progress |
 | 4 | Parallel Planning Sprint | Planned |
 | 5 | Memory & Persistence | Planned |
 | 6 | Specialist Agents (Todo MVC) | Planned |
@@ -210,22 +243,14 @@ devteam-ai/
 | Technical Writer | Documentation | 7 |
 | Delivery Summarizer | Status updates | 10 |
 
-## Documentation
-
-- [Core Design Document](docs/CoreDesignDocument.md)
-- [Roadmap Details](docs/Roadmap.md)
-- [Approval Gate Protocol](docs/approval-gate-protocol.md)
-- [Budget Enforcement Rules](docs/budget-enforcement-rules.md)
-- [Testing Strategy](docs/testing-strategy.md)
-
 ## Technology Stack
 
-- **Orchestration**: LangGraph + CrewAI
-- **LLM Interface**: LangChain ChatModel
-- **UI**: React 18 + TypeScript (Slice 2)
+- **Orchestration**: LangGraph (CrewAI planned, not yet wired in)
+- **LLM Interface**: Anthropic SDK directly (LangChain ChatModel kept as a fallback for future providers)
+- **Frontend**: React 18 + TypeScript + Vite + Zustand
 - **API Server**: FastAPI + Socket.IO
-- **State**: SQLite (default) / Redis (optional)
-- **Vector Store**: Chroma / FAISS
+- **Persistence**: SQLite via LangGraph `SqliteSaver`
+- **Vector Store**: Chroma / FAISS (planned)
 
 ## Contributing
 
