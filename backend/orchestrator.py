@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import is_dataclass
+from pathlib import Path
 from typing import Any, Awaitable, Callable
+
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from backend.agents.budget_guard import BudgetGuard
 from backend.agents.registry import AgentRegistry
@@ -55,8 +57,34 @@ class Orchestrator:
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._pending_resume: dict[str, asyncio.Future[dict]] = {}
 
+        # Slice 5 / Task 5.1: SQLite-backed checkpointing.
+        #
+        # AsyncSqliteSaver.from_conn_string returns an async context manager.
+        # We hold the CM on the instance and lazily enter it the first time a
+        # caller (run() or load()) actually needs a saver. This avoids forcing
+        # __init__ to be async while still giving us a single saver shared by
+        # every project on this orchestrator instance.
+        Path(self.config.sqlite_path).parent.mkdir(parents=True, exist_ok=True)
+        self._saver_cm = AsyncSqliteSaver.from_conn_string(self.config.sqlite_path)
+        self._saver: AsyncSqliteSaver | None = None
+
     def _room(self, project_id: str) -> str:
         return f"project:{project_id}"
+
+    async def _ensure_saver(self) -> AsyncSqliteSaver:
+        """Lazily enter the AsyncSqliteSaver context manager.
+
+        First call enters the CM, captures the live saver, and enables WAL
+        journaling so concurrent reads (load() while run() is writing) don't
+        block. Subsequent calls reuse the same saver.
+        """
+        if self._saver is None:
+            self._saver = await self._saver_cm.__aenter__()
+            # WAL improves read/write concurrency on SQLite, which matters
+            # because load() may be invoked while run() is mid-execution.
+            async with self._saver.conn.cursor() as cur:
+                await cur.execute("PRAGMA journal_mode=WAL;")
+        return self._saver
 
     async def run(self, project_id: str, idea: str, emit: EmitFn) -> None:
         """Kick off a new workflow for the given project id.
@@ -223,8 +251,9 @@ class Orchestrator:
             )
             return {"current_phase": 4}
 
+        saver = await self._ensure_saver()
         graph = build_graph(
-            checkpointer=None,  # SQLite checkpointer wired in Slice 5
+            checkpointer=saver,
             clarifying_pm_node=clarifying_node,
             approval_node=approval_node,
             summarizer_node=summarizer_node,
@@ -272,6 +301,42 @@ class Orchestrator:
         fut = self._pending_resume.pop(project_id, None)
         if fut and not fut.done():
             fut.cancel()
+
+    async def load(self, project_id: str) -> dict | None:
+        """Hydrate the latest persisted ProjectState for a project.
+
+        Returns a plain dict (the ProjectState model_dump) so the Socket.IO
+        layer can serialize it directly. Returns None when the thread has no
+        checkpoint yet -- e.g. the project was never started or the saver was
+        wiped between runs.
+        """
+        saver = await self._ensure_saver()
+        config_dict = {"configurable": {"thread_id": project_id}}
+        tup = await saver.aget_tuple(config_dict)
+        if tup is None:
+            return None
+
+        # LangGraph 1.0 with a Pydantic StateGraph stores each model field as
+        # its own channel, so tup.checkpoint["channel_values"] is a dict shaped
+        # like {"idea": ..., "questions": [...], ...}. Bookkeeping channels
+        # such as "__start__" or "messages" can also appear; filter to the
+        # fields ProjectState actually declares before validating to avoid
+        # Pydantic extras errors and to drop runtime-only signals.
+        checkpoint = tup.checkpoint or {}
+        channel_values: dict[str, Any] = checkpoint.get("channel_values") or {}
+        known_fields = set(ProjectState.model_fields.keys())
+        filtered = {k: v for k, v in channel_values.items() if k in known_fields}
+
+        try:
+            state_obj = ProjectState.model_validate(filtered)
+        except Exception:
+            logger.exception(
+                "orchestrator.load: failed to validate checkpoint for %s; raw=%r",
+                project_id,
+                channel_values,
+            )
+            return None
+        return state_obj.model_dump()
 
     async def _await_resume(self, project_id: str) -> dict:
         fut: asyncio.Future[dict] = asyncio.get_running_loop().create_future()
