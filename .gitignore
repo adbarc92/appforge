@@ -268,3 +268,6 @@ temp/
 /artifacts/
 /generated/
 budget_logs/
+
+# Local SQLite checkpoint/smoke databases
+/data/
