@@ -84,4 +84,18 @@ async def test_load_project_hydrates_persisted_state(server_and_client):
         if state:
             break
     assert state, "expected project_state hydration emit"
-    assert state[0]["idea"] == "build a todo app"
+    snap = state[0]
+    # Hydration payload must match the frontend ProjectStateSnapshot shape.
+    assert set(snap.keys()) == {
+        "project_id",
+        "idea",
+        "messages",
+        "agents",
+        "approval_pending",
+        "budget",
+        "phase",
+        "prd",
+        "status",
+    }
+    assert snap["project_id"] == project_id
+    assert snap["idea"] == "build a todo app"

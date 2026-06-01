@@ -122,7 +122,7 @@ async def load_project(sid: str, data: dict[str, Any]) -> dict | None:
         return {"error": "project_id required"}
     room = f"project:{project_id}"
     await sio.enter_room(sid, room)
-    snap = await orchestrator.load(project_id)
+    snap = await orchestrator.load_snapshot(project_id)
     if snap is None:
         return {"error": "project not found"}
     await sio.emit("project_state", snap, to=sid)

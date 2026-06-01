@@ -437,6 +437,113 @@ class Orchestrator:
             return None
         return state_obj.model_dump()
 
+    # Display names mirror the frontend's AGENT_NAMES map so a hydrated node
+    # keeps its label; the store merges these over its pending defaults.
+    _AGENT_DISPLAY_NAMES = {
+        "orchestrator": "Orchestrator",
+        "clarifying_pm": "Clarifying PM",
+        "delivery_summarizer": "Delivery Summarizer",
+    }
+
+    async def load_snapshot(self, project_id: str) -> dict | None:
+        """Adapt the persisted ProjectState into the frontend ProjectStateSnapshot.
+
+        load() returns the raw model_dump (used by retry/persistence). The React
+        store's hydrateFromState expects a different shape — project_id, a
+        reconstructed message transcript, an agents map, a pending-approval
+        object, budget, and a derived status — so reload can rehydrate the view.
+        Returns None when the thread has no checkpoint.
+        """
+        state = await self.load(project_id)
+        if state is None:
+            return None
+
+        prd = state.get("prd")
+        phase = state.get("current_phase", 3)
+        approval_count = state.get("approval_count", 0)
+        approved = state.get("approval_status") == "approved"
+
+        # Reconstruct the transcript from interleaved questions/answers. The
+        # checkpoint stores no real timestamps, so use a monotonic counter for
+        # ordering only.
+        questions = state.get("questions", []) or []
+        answers = state.get("answers", []) or []
+        messages: list[dict[str, Any]] = []
+        ts = 0
+        for i in range(max(len(questions), len(answers))):
+            if i < len(questions):
+                messages.append({
+                    "id": f"q{i}",
+                    "role": "agent",
+                    "agent": "clarifying_pm",
+                    "text": questions[i].get("text", ""),
+                    "timestamp": ts,
+                })
+                ts += 1
+            if i < len(answers):
+                messages.append({
+                    "id": f"a{i}",
+                    "role": "user",
+                    "text": answers[i].get("text", ""),
+                    "timestamp": ts,
+                })
+                ts += 1
+
+        # Pending approval exists once a PRD is on the table and not yet approved.
+        approval_pending: dict[str, Any] | None = None
+        if prd and not approved:
+            approval_pending = {
+                "agent": "clarifying_pm",
+                "phase": 3,
+                "content": prd,
+                "escalation": approval_count >= 3,
+            }
+
+        # Minimal agents map reflecting what the checkpoint implies; the store
+        # fills the remaining 15 from its pending defaults.
+        def _node(agent_id: str, status: str) -> dict[str, Any]:
+            return {
+                "id": agent_id,
+                "name": self._AGENT_DISPLAY_NAMES[agent_id],
+                "status": status,
+            }
+
+        agents = {
+            "orchestrator": _node(
+                "orchestrator", "complete" if phase >= 4 else "running"
+            ),
+            "clarifying_pm": _node(
+                "clarifying_pm",
+                "complete" if prd else ("running" if questions else "pending"),
+            ),
+        }
+        if phase >= 4:
+            agents["delivery_summarizer"] = _node("delivery_summarizer", "complete")
+
+        if phase >= 4:
+            status = "complete"
+        elif prd and not approved:
+            status = "paused"
+        else:
+            status = "running"
+
+        budget_state = self.budget_guard.state
+        return {
+            "project_id": project_id,
+            "idea": state.get("idea", ""),
+            "messages": messages,
+            "agents": agents,
+            "approval_pending": approval_pending,
+            "budget": {
+                "spent": budget_state.total_spent,
+                "limit": budget_state.hard_limit,
+                "threshold": budget_state.current_threshold,
+            },
+            "phase": phase,
+            "prd": prd,
+            "status": status,
+        }
+
     async def _await_resume(self, project_id: str) -> dict:
         queue = self._resume_queues.get(project_id)
         if queue is None:
