@@ -120,11 +120,15 @@ class ClarifyingPmAgent(MockAgent):
                 },
                 "cost": 0.0,
             }
+        # On re-entry after a rejection the agent emits a revised PRD that
+        # references the accumulated feedback, so the approval cycle can repeat.
+        rejections = task_dict.get("rejection_comments", []) or []
+        revision = f" (revision {len(rejections)})" if rejections else ""
         return {
             "status": "success",
             "artifact": {
                 "prd": (
-                    "# Mock PRD\n\n"
+                    f"# Mock PRD{revision}\n\n"
                     "## Acceptance Criteria\n"
                     "- [ ] build the thing\n"
                 )

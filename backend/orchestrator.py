@@ -150,6 +150,7 @@ class Orchestrator:
                     "idea": state.idea,
                     "questions": [q.model_dump() for q in state.questions],
                     "answers": [a.model_dump() for a in state.answers],
+                    "rejection_comments": list(state.rejection_comments),
                     "mode": "mock" if self.mock_mode else "real",
                 }
             )
@@ -214,6 +215,10 @@ class Orchestrator:
                         "phase": 3,
                         "agent": "clarifying_pm",
                         "content": prd_text,
+                        # After three rejections the gate surfaces an escalation
+                        # flag (per approval-gate-protocol). approval_count is
+                        # bumped by approval_node on each non-approve decision.
+                        "escalation": state.approval_count >= 3,
                     },
                     room,
                 )
@@ -247,10 +252,14 @@ class Orchestrator:
                         question_index=state.questions[-1].index,
                         text=answer_text,
                     )
+                    # NB: do NOT bump approval_count here. It counts PRD
+                    # rejection cycles (used for escalation); answering a
+                    # clarifying question is not a rejection. We reuse
+                    # approval_status="rejected" only as the routing signal back
+                    # to clarifying_pm.
                     return {
                         "answers": state.answers + [new_answer],
                         "approval_status": "rejected",
-                        "approval_count": state.approval_count + 1,
                     }
                 return {"approval_status": "rejected"}
 
@@ -262,10 +271,16 @@ class Orchestrator:
                 or ("approved" if decision.get("answer", "").strip() else "rejected")
             )
             approved = decision_value == "approved"
-            return {
+            update: dict[str, Any] = {
                 "approval_status": decision_value,
                 "approval_count": state.approval_count + (0 if approved else 1),
             }
+            # Thread reject/modify feedback back to clarifying_pm for the next
+            # revision so the agent can incorporate it.
+            comment = (decision.get("comment") or "").strip()
+            if not approved and comment:
+                update["rejection_comments"] = state.rejection_comments + [comment]
+            return update
 
         async def summarizer_node(state: ProjectState) -> dict[str, Any]:
             await emit(
