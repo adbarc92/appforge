@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.types import Command, interrupt
 
 from backend.agents.budget_guard import BudgetGuard
 from backend.agents.registry import AgentRegistry
@@ -55,7 +56,11 @@ class Orchestrator:
         # testing.
         self.budget_guard = budget_guard or BudgetGuard()
         self._tasks: dict[str, asyncio.Task[None]] = {}
-        self._pending_resume: dict[str, asyncio.Future[dict]] = {}
+        # Per-project queue of resume decisions. A queue (not a single future)
+        # is used so a decision that arrives in the window between one ainvoke
+        # returning at an interrupt and the driver re-arming via _await_resume
+        # is buffered rather than dropped.
+        self._resume_queues: dict[str, asyncio.Queue[dict]] = {}
 
         # Slice 5 / Task 5.1: SQLite-backed checkpointing.
         #
@@ -67,6 +72,11 @@ class Orchestrator:
         Path(self.config.sqlite_path).parent.mkdir(parents=True, exist_ok=True)
         self._saver_cm = AsyncSqliteSaver.from_conn_string(self.config.sqlite_path)
         self._saver: AsyncSqliteSaver | None = None
+        # aiosqlite connections are bound to the event loop they were opened
+        # on. The orchestrator is a module-level singleton in backend.main, so
+        # in tests (which create a fresh loop per test) we need to detect a
+        # loop swap and re-open the saver. Track the loop the saver was on.
+        self._saver_loop: asyncio.AbstractEventLoop | None = None
 
     def _room(self, project_id: str) -> str:
         return f"project:{project_id}"
@@ -76,10 +86,19 @@ class Orchestrator:
 
         First call enters the CM, captures the live saver, and enables WAL
         journaling so concurrent reads (load() while run() is writing) don't
-        block. Subsequent calls reuse the same saver.
+        block. Subsequent calls reuse the same saver — unless we have moved
+        to a new event loop (tests create one per test), in which case the
+        prior connection is dead and we open a fresh saver on the new loop.
         """
+        current_loop = asyncio.get_running_loop()
+        if self._saver is not None and self._saver_loop is not current_loop:
+            self._saver = None
+            self._saver_cm = AsyncSqliteSaver.from_conn_string(
+                self.config.sqlite_path
+            )
         if self._saver is None:
             self._saver = await self._saver_cm.__aenter__()
+            self._saver_loop = current_loop
             # WAL improves read/write concurrency on SQLite, which matters
             # because load() may be invoked while run() is mid-execution.
             async with self._saver.conn.cursor() as cur:
@@ -93,6 +112,9 @@ class Orchestrator:
         via stop(). Resumption after an interrupt is driven by resume().
         """
         room = self._room(project_id)
+        # Arm the resume queue before any node can interrupt so user_message /
+        # approve decisions are never dropped for lack of a destination.
+        self._resume_queues[project_id] = asyncio.Queue()
         await emit("agent_status", {"agent": "orchestrator", "status": "running"}, room)
 
         clarifying_agent = self.registry.get_agent("clarifying_pm")
@@ -199,7 +221,15 @@ class Orchestrator:
             return update
 
         async def approval_node(state: ProjectState) -> dict[str, Any]:
-            decision = await self._await_resume(project_id)
+            # Pause here via the dynamic interrupt() helper. ainvoke returns to
+            # the driver with a "__interrupt__" key; the driver awaits the user's
+            # input and re-invokes with Command(resume=decision), at which point
+            # interrupt() returns that value. There is intentionally no side
+            # effect before this line: on resume LangGraph re-runs the node body
+            # from the top, so anything above interrupt() would run twice.
+            # (approval_required is emitted from clarifying_node when a PRD
+            # exists, so it is not duplicated here.)
+            decision = interrupt({"phase": 3, "has_prd": bool(state.prd)})
 
             # Until the PRD is generated, the clarifying loop is still gathering
             # answers. The user_message handler dispatches every chat input
@@ -262,8 +292,19 @@ class Orchestrator:
         async def _driver() -> None:
             try:
                 config_dict = {"configurable": {"thread_id": project_id}}
-                initial = ProjectState(idea=idea)
-                await graph.ainvoke(initial, config=config_dict)
+                inputs: Any = ProjectState(idea=idea)
+                # Drive the graph across interrupts. Each ainvoke runs until the
+                # approval gate calls interrupt(), which surfaces as a
+                # "__interrupt__" key in the returned state. We then block on the
+                # user's next decision (an answer during clarification, or an
+                # approve/reject once the PRD exists) and resume with it.
+                while True:
+                    result = await graph.ainvoke(inputs, config=config_dict)
+                    if isinstance(result, dict) and "__interrupt__" in result:
+                        decision = await self._await_resume(project_id)
+                        inputs = Command(resume=decision)
+                        continue
+                    break
                 logger.info("orchestrator.run completed for %s", project_id)
             except asyncio.CancelledError:
                 logger.info("orchestrator.run cancelled for %s", project_id)
@@ -285,10 +326,15 @@ class Orchestrator:
         self._tasks[project_id] = task
 
     async def resume(self, project_id: str, decision: dict) -> None:
-        """Complete the pending interrupt future with the user's decision."""
-        fut = self._pending_resume.get(project_id)
-        if fut and not fut.done():
-            fut.set_result(decision)
+        """Deliver the user's decision to the waiting driver loop.
+
+        Enqueues on the per-project queue so a decision that arrives before the
+        driver has re-armed is buffered rather than dropped (see _resume_queues).
+        """
+        queue = self._resume_queues.get(project_id)
+        if queue is None:
+            queue = self._resume_queues[project_id] = asyncio.Queue()
+        await queue.put(decision)
 
     async def stop(self, project_id: str) -> None:
         task = self._tasks.pop(project_id, None)
@@ -298,9 +344,7 @@ class Orchestrator:
                 await task
             except (asyncio.CancelledError, Exception):
                 pass
-        fut = self._pending_resume.pop(project_id, None)
-        if fut and not fut.done():
-            fut.cancel()
+        self._resume_queues.pop(project_id, None)
 
     async def load(self, project_id: str) -> dict | None:
         """Hydrate the latest persisted ProjectState for a project.
@@ -339,6 +383,7 @@ class Orchestrator:
         return state_obj.model_dump()
 
     async def _await_resume(self, project_id: str) -> dict:
-        fut: asyncio.Future[dict] = asyncio.get_running_loop().create_future()
-        self._pending_resume[project_id] = fut
-        return await fut
+        queue = self._resume_queues.get(project_id)
+        if queue is None:
+            queue = self._resume_queues[project_id] = asyncio.Queue()
+        return await queue.get()

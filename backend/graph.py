@@ -76,15 +76,14 @@ def build_graph(
     )
     builder.add_edge("delivery_summarizer", END)
 
-    # interrupt_before requires a checkpointer to actually pause execution.
-    # In Slice 3 we have no checkpointer, so the orchestrator's approval_node
-    # blocks on a future via _await_resume; Slice 5 introduces SqliteSaver
-    # plus Command(resume=...) and re-adds interrupt_before then.
+    # The approval gate pauses via the dynamic interrupt() helper called inside
+    # approval_node (see orchestrator), NOT via a static interrupt_before. The
+    # two are mutually exclusive: interrupt_before returns from ainvoke *before*
+    # the node body runs, which would skip the interrupt() call and the driver's
+    # Command(resume=...) re-entry entirely. A checkpointer is still required for
+    # interrupt()/resume to work, so we pass it through when provided.
     if checkpointer is not None:
-        return builder.compile(
-            checkpointer=checkpointer,
-            interrupt_before=["product_owner_approval"],
-        )
+        return builder.compile(checkpointer=checkpointer)
     return builder.compile()
 
 
