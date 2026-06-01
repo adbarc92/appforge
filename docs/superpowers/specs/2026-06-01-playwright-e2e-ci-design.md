@@ -17,7 +17,7 @@ Separately, `.github/workflows/ci.yml` is stale: it is pip-based (the repo uses 
 
 ## Non-goals (YAGNI)
 
-- Slash-command browser tests — Vitest already covers `parseCommand` and the approve/reject/modify wiring.
+- Slash-command browser tests — Vitest already covers `parseCommand` and the approve/reject/modify wiring. **Deferred follow-up (explicitly wanted later):** add Playwright coverage that types `/approve`, `/reject <reason>`, `/modify <text>` into the chat input and asserts the same outcomes as the button paths. Postponed to a future iteration; the `e2e/` scaffold and helpers from this work are the foundation for it.
 - Multi-browser matrix (Firefox/WebKit) — chromium only.
 - Visual screenshot / snapshot diffing.
 - Real-Anthropic E2E — the suite runs in `MOCK_AGENTS=true` for determinism and to stay offline.
