@@ -74,7 +74,44 @@ async def user_message(sid: str, data: dict[str, Any]) -> dict | None:
     if not project_id or not text:
         return {"error": "project_id and text required"}
 
-    await orchestrator.resume(project_id, {"answer": text})
+    await orchestrator.user_message(project_id, text)
+    return None
+
+
+@sio.event
+async def approve(sid: str, data: dict[str, Any]) -> dict | None:
+    project_id = (data or {}).get("project_id", "")
+    if not project_id:
+        return {"error": "project_id required"}
+    await orchestrator.approve(project_id, (data or {}).get("comment"))
+    return None
+
+
+@sio.event
+async def reject(sid: str, data: dict[str, Any]) -> dict | None:
+    project_id = (data or {}).get("project_id", "")
+    if not project_id:
+        return {"error": "project_id required"}
+    await orchestrator.reject(project_id, (data or {}).get("comment"))
+    return None
+
+
+@sio.event
+async def modify(sid: str, data: dict[str, Any]) -> dict | None:
+    project_id = (data or {}).get("project_id", "")
+    comment = (data or {}).get("comment", "")
+    if not project_id or not comment:
+        return {"error": "project_id and comment required"}
+    await orchestrator.modify(project_id, comment)
+    return None
+
+
+@sio.event
+async def retry(sid: str, data: dict[str, Any]) -> dict | None:
+    project_id = (data or {}).get("project_id", "")
+    if not project_id:
+        return {"error": "project_id required"}
+    await orchestrator.retry(project_id, _emit)
     return None
 
 
@@ -85,9 +122,10 @@ async def load_project(sid: str, data: dict[str, Any]) -> dict | None:
         return {"error": "project_id required"}
     room = f"project:{project_id}"
     await sio.enter_room(sid, room)
-    # SqliteSaver-driven hydration lands in Slice 5. For now, just confirm the
-    # room join; if the project is currently running, its existing emits will
-    # reach this client.
+    snap = await orchestrator.load(project_id)
+    if snap is None:
+        return {"error": "project not found"}
+    await sio.emit("project_state", snap, to=sid)
     return None
 
 

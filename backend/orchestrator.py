@@ -61,6 +61,9 @@ class Orchestrator:
         # returning at an interrupt and the driver re-arming via _await_resume
         # is buffered rather than dropped.
         self._resume_queues: dict[str, asyncio.Queue[dict]] = {}
+        # Last emit callback per project, captured at run() time so retry() can
+        # re-drive the graph without the caller re-supplying it.
+        self._last_emit: dict[str, EmitFn] = {}
 
         # Slice 5 / Task 5.1: SQLite-backed checkpointing.
         #
@@ -112,6 +115,7 @@ class Orchestrator:
         via stop(). Resumption after an interrupt is driven by resume().
         """
         room = self._room(project_id)
+        self._last_emit[project_id] = emit
         # Arm the resume queue before any node can interrupt so user_message /
         # approve decisions are never dropped for lack of a destination.
         self._resume_queues[project_id] = asyncio.Queue()
@@ -335,6 +339,42 @@ class Orchestrator:
         if queue is None:
             queue = self._resume_queues[project_id] = asyncio.Queue()
         await queue.put(decision)
+
+    # --- Public decision API ------------------------------------------------
+    #
+    # These map user actions onto resume payloads. During clarification a chat
+    # message is the answer to the latest question; once a PRD exists the same
+    # interrupt becomes the approval gate, where approve/reject/modify apply.
+
+    async def user_message(self, project_id: str, text: str) -> None:
+        """Treat a chat message as the answer to the latest clarifying question."""
+        await self.resume(project_id, {"answer": text})
+
+    async def approve(self, project_id: str, comment: str | None = None) -> None:
+        await self.resume(project_id, {"decision": "approved", "comment": comment})
+
+    async def reject(self, project_id: str, comment: str | None = None) -> None:
+        await self.resume(project_id, {"decision": "rejected", "comment": comment})
+
+    async def modify(self, project_id: str, comment: str) -> None:
+        await self.resume(project_id, {"decision": "modified", "comment": comment})
+
+    async def retry(self, project_id: str, emit: EmitFn | None = None) -> None:
+        """Re-run the graph from the last checkpoint after a failed/ended task.
+
+        No-op if a driver task is still running. Otherwise re-invoke run() with
+        the persisted idea so ainvoke resumes from the latest checkpoint.
+        """
+        task = self._tasks.get(project_id)
+        if task and not task.done():
+            return
+        emit_fn = emit or self._last_emit.get(project_id)
+        if emit_fn is None:
+            return
+        snap = await self.load(project_id)
+        if snap is None:
+            return
+        await self.run(project_id, snap.get("idea", ""), emit_fn)
 
     async def stop(self, project_id: str) -> None:
         task = self._tasks.pop(project_id, None)
