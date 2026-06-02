@@ -56,7 +56,20 @@ async def test_load_snapshot_has_frontend_shape(tmp_path, monkeypatch):
     await orch.run("p-snap", "build a todo app", emit)
     await _drive_to_prd(orch, "p-snap", received)
 
-    snap = await orch.load_snapshot("p-snap")
+    # approval_required is emitted from INSIDE clarifying_node before that node
+    # returns/checkpoints, so a single immediate load_snapshot may read a
+    # checkpoint where prd is not yet durable.  Poll until prd is present.
+    snap = None
+    for _ in range(60):
+        await asyncio.sleep(0.05)
+        candidate = await orch.load_snapshot("p-snap")
+        if (
+            candidate is not None
+            and candidate.get("prd")
+            and "# Mock PRD" in candidate["prd"]
+        ):
+            snap = candidate
+            break
     await orch.stop("p-snap")
 
     assert snap is not None
