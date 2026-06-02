@@ -47,7 +47,7 @@ function attachListeners(socket: Socket): void {
   });
   socket.on("phase_complete", (p: PhaseCompletePayload) => {
     useProjectStore.getState().addMessage({
-      id: `${Date.now()}-phase`,
+      id: `${Date.now()}-${Math.random()}-phase`,
       role: "system",
       text: `Phase ${p.phase} ${p.status ?? "complete"}: ${p.summary}`,
       timestamp: Date.now(),
@@ -81,7 +81,9 @@ export interface UseSocketApi {
 }
 
 export function useSocket(): UseSocketApi {
-  // Ensure the socket + its listeners exist as soon as any component mounts.
+  // Early-init on mount so the socket handshake begins (and listeners are
+  // attached to receive server events) before the first user action — e.g. the
+  // top-level App mount that doesn't itself emit. getSocket() is idempotent.
   useEffect(() => {
     getSocket();
   }, []);
