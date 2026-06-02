@@ -63,7 +63,7 @@ describe("useSocket", () => {
     expect(useProjectStore.getState().prd).toBe("# PRD");
   });
 
-  test("phase_complete clears approvalPending and prd", () => {
+  test("phase_complete clears approvalPending but keeps prd", () => {
     renderHook(() => useSocket());
     useProjectStore.getState().setApprovalPending({
       agent: "clarifying_pm", phase: 3, content: "# PRD",
@@ -75,6 +75,29 @@ describe("useSocket", () => {
       }
     });
     expect(useProjectStore.getState().approvalPending).toBeNull();
-    expect(useProjectStore.getState().prd).toBeNull();
+    expect(useProjectStore.getState().prd).toBe("# PRD");
+  });
+
+  test("planning_artifact stores by kind", () => {
+    renderHook(() => useSocket());
+    act(() => { for (const cb of listeners.planning_artifact ?? []) cb({ kind: "adr", content: "# ADR" }); });
+    expect(useProjectStore.getState().adr).toContain("ADR");
+  });
+
+  test("approval_required kind=plan does not overwrite prd", () => {
+    renderHook(() => useSocket());
+    useProjectStore.getState().setPRD("# Real PRD");
+    act(() => { for (const cb of listeners.approval_required ?? []) cb({ phase: 4, kind: "plan", content: "# Plan" }); });
+    expect(useProjectStore.getState().prd).toBe("# Real PRD");
+    expect(useProjectStore.getState().approvalPending?.kind).toBe("plan");
+  });
+
+  test("phase_complete clears approvalPending but keeps prd (new task)", () => {
+    renderHook(() => useSocket());
+    useProjectStore.getState().setApprovalPending({ agent: "x", phase: 3, content: "# PRD" });
+    useProjectStore.getState().setPRD("# PRD");
+    act(() => { for (const cb of listeners.phase_complete ?? []) cb({ phase: 3, summary: "PRD approved", status: "success" }); });
+    expect(useProjectStore.getState().approvalPending).toBeNull();
+    expect(useProjectStore.getState().prd).toBe("# PRD");
   });
 });
