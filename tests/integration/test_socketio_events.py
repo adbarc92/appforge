@@ -75,13 +75,25 @@ async def test_load_project_hydrates_persisted_state(server_and_client):
     assert created, "expected project_created"
     project_id = created[0]["project_id"]
 
-    await client.emit("load_project", {"project_id": project_id})
-    for _ in range(40):
-        await asyncio.sleep(0.05)
-        if state:
+    # Poll load_project until the persisted checkpoint has the idea field durable.
+    # The first agent_message is emitted from inside clarifying_node BEFORE LangGraph
+    # writes the post-node checkpoint; under full-suite load the load_project handler
+    # can race the checkpoint write and read an earlier checkpoint where idea=="".
+    # Polling until the snapshot is non-empty and idea is populated is deterministic.
+    snap = None
+    for _ in range(60):
+        state.clear()
+        await client.emit("load_project", {"project_id": project_id})
+        for _ in range(20):
+            await asyncio.sleep(0.05)
+            if state:
+                break
+        if state and state[0].get("idea"):
+            snap = state[0]
             break
-    assert state, "expected project_state hydration emit"
-    snap = state[0]
+        await asyncio.sleep(0.05)
+
+    assert snap is not None, "expected project_state hydration emit"
     # Hydration payload must match the frontend ProjectStateSnapshot shape.
     assert set(snap.keys()) == {
         "project_id",
