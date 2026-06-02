@@ -1,18 +1,5 @@
 # CLAUDE.md - AI Assistant Context for DevTeam.AI
 
-<!-- BEGIN: ACTIVE-SESSION-PICKUP — remove this block when feat/alignment-phase3-mvp merges to main -->
-## Active session pickup
-
-If the current branch is `feat/alignment-phase3-mvp` (check with `git rev-parse --abbrev-ref HEAD`), read [`docs/Status-2026_06_01.md`](docs/Status-2026_06_01.md) before doing anything else. It documents:
-
-- where we are in [`docs/superpowers/plans/2026-04-21-alignment-phase3-mvp.md`](docs/superpowers/plans/2026-04-21-alignment-phase3-mvp.md) (Slices 1–4 done; Slice 5 code-complete except Task 5.9 manual smoke + PR),
-- the interrupt/resume + queue-based resume mechanism and the `approval_count` semantics (so the next session doesn't re-derive them),
-- the design rule that `approval_required` is emitted from `clarifying_node`, not `approval_node` (the node re-runs from the top on resume),
-- a known limitation: browser-reload hydration is only partial — `load_project` emits the raw `ProjectState` dump, not the frontend `ProjectStateSnapshot`, and the checkpoint has no chat transcript.
-
-The prior [`docs/Status-2026_05_03.md`](docs/Status-2026_05_03.md) is superseded (kept for history). If the branch has changed, this section and the linked status doc are stale — skip them and delete this block.
-<!-- END: ACTIVE-SESSION-PICKUP -->
-
 ## Project Overview
 
 **DevTeam.AI** is a fully autonomous, parallel-first, iterative multi-agent system that replicates a 12-14 person modern software development team. The system takes a natural-language idea from a human user (acting as Product Owner) and orchestrates specialized AI agents to clarify requirements, design solutions, write code, test, deploy, and iterate until the product is shipped.
