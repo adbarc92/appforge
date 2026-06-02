@@ -1,5 +1,17 @@
 # CLAUDE.md - AI Assistant Context for DevTeam.AI
 
+<!-- BEGIN: ACTIVE-SESSION-PICKUP — remove this block once Phase 6 work begins on its own branch -->
+## Active session pickup
+
+Phases 0–4 are merged to `main` (Phase 4 Parallel Planning Sprint shipped 2026-06-02). Before starting new work, read [`docs/Status-2026_06_02.md`](docs/Status-2026_06_02.md). It documents:
+
+- the roadmap position (Phase 5 ~60%; **Phase 6 — Specialist Agents is next and now unblocked**),
+- key Phase 4 facts a new session needs (`ENABLE_PHASE4` is default ON; the list-return fan-out → `planning_fan_in` (emits the card once) → `planning_approval` (interrupt only) shape; the `kind:"prd"|"plan"` gate discriminator; `load_snapshot` detects the plan gate by artifact presence),
+- tracked non-blocking follow-ups (real token cost threading, LangSmith tracing, Phase-5 multi-project recall).
+
+Once Phase 6 (or other new work) has its own branch and status doc, this block is stale — delete it.
+<!-- END: ACTIVE-SESSION-PICKUP -->
+
 ## Project Overview
 
 **DevTeam.AI** is a fully autonomous, parallel-first, iterative multi-agent system that replicates a 12-14 person modern software development team. The system takes a natural-language idea from a human user (acting as Product Owner) and orchestrates specialized AI agents to clarify requirements, design solutions, write code, test, deploy, and iterate until the product is shipped.
