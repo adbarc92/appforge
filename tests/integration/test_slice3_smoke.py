@@ -4,6 +4,7 @@ Boots the real ASGI app on a localhost port and drives it with a Socket.IO
 client: emits start_project, waits for project_created, and confirms the
 mock Clarifying PM emits a clarifying question through the room.
 """
+
 import asyncio
 
 import pytest
@@ -15,9 +16,7 @@ import uvicorn
 async def server_and_client():
     from backend.main import asgi_app
 
-    config = uvicorn.Config(
-        asgi_app, host="127.0.0.1", port=8767, log_level="warning"
-    )
+    config = uvicorn.Config(asgi_app, host="127.0.0.1", port=8767, log_level="warning")
     server = uvicorn.Server(config)
     task = asyncio.create_task(server.serve())
     while not server.started:
@@ -78,7 +77,9 @@ async def test_answer_loop_advances_through_questions_to_prd(server_and_client):
             await asyncio.sleep(0.05)
             if predicate():
                 return
-        raise AssertionError(f"timed out; messages={messages} approvals={approval_required}")
+        raise AssertionError(
+            f"timed out; messages={messages} approvals={approval_required}"
+        )
 
     await wait_for(lambda: len(project_created) > 0)
     project_id = project_created[0]["project_id"]
@@ -104,6 +105,8 @@ async def test_answer_loop_advances_through_questions_to_prd(server_and_client):
             if "Clarifying question" in (m.get("text") or "")
         }
     )
-    assert distinct == ["1", "2", "3"], (
-        f"expected three distinct mock questions, got {distinct}: {messages}"
-    )
+    assert distinct == [
+        "1",
+        "2",
+        "3",
+    ], f"expected three distinct mock questions, got {distinct}: {messages}"

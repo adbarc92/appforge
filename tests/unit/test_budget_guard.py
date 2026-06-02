@@ -9,14 +9,11 @@ Tests for BudgetGuard including:
 - Hard stop at 100%
 """
 
-import tempfile
-from pathlib import Path
-
 import pytest
 import yaml
 
 from backend.agents.base_agent import AgentTask
-from backend.agents.budget_guard import BudgetAction, BudgetGuard, BudgetState, SpendRecord
+from backend.agents.budget_guard import BudgetAction, BudgetGuard, BudgetState
 
 
 @pytest.fixture

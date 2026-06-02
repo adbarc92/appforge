@@ -1,10 +1,14 @@
 """Unit tests for the real ClarifyingPMAgent using FakeListChatModel."""
+
 import json
 
 import pytest
 from langchain_community.chat_models.fake import FakeListChatModel
 
-from backend.agents.clarifying_pm import ClarifyingPMAgent, ClarifyingResponse  # noqa: F401
+from backend.agents.clarifying_pm import (  # noqa: F401
+    ClarifyingPMAgent,
+    ClarifyingResponse,
+)
 
 
 def _fake_model(responses: list[dict]) -> FakeListChatModel:
@@ -14,7 +18,13 @@ def _fake_model(responses: list[dict]) -> FakeListChatModel:
 @pytest.mark.asyncio
 async def test_asks_first_question_from_idea():
     model = _fake_model(
-        [{"next_question": "Who is the primary user?", "final_prd": None, "done": False}]
+        [
+            {
+                "next_question": "Who is the primary user?",
+                "final_prd": None,
+                "done": False,
+            }
+        ]
     )
     agent = ClarifyingPMAgent(model=model, max_questions=6)
     out = await agent.execute(
@@ -28,7 +38,13 @@ async def test_asks_first_question_from_idea():
 @pytest.mark.asyncio
 async def test_follow_up_uses_prior_answers():
     model = _fake_model(
-        [{"next_question": "What is the success metric?", "final_prd": None, "done": False}]
+        [
+            {
+                "next_question": "What is the success metric?",
+                "final_prd": None,
+                "done": False,
+            }
+        ]
     )
     agent = ClarifyingPMAgent(model=model, max_questions=6)
     out = await agent.execute(

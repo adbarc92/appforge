@@ -4,6 +4,7 @@ load() returns the raw ProjectState model_dump (used by retry/persistence);
 load_snapshot() adapts it to the shape the React store's hydrateFromState
 expects, so a browser reload can rehydrate the project view.
 """
+
 import asyncio
 
 import pytest

@@ -4,6 +4,7 @@ Reads environment variables (loaded from .env by main.py at startup) and the
 root-level config/*.yaml files. Exposes a single Config dataclass used by the
 rest of the backend.
 """
+
 from __future__ import annotations
 
 import os
@@ -60,7 +61,7 @@ class Config:
     llm_yaml: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def load(cls) -> "Config":
+    def load(cls) -> Config:
         default_sqlite = str(REPO_ROOT / "data" / "checkpoints.db")
         return cls(
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),

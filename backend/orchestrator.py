@@ -4,12 +4,15 @@ The orchestrator owns one asyncio task per project and a registry of pending
 interrupt resumes. It does NOT import Socket.IO -- the emit callable is
 injected by main.py.
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command, interrupt
@@ -96,9 +99,7 @@ class Orchestrator:
         current_loop = asyncio.get_running_loop()
         if self._saver is not None and self._saver_loop is not current_loop:
             self._saver = None
-            self._saver_cm = AsyncSqliteSaver.from_conn_string(
-                self.config.sqlite_path
-            )
+            self._saver_cm = AsyncSqliteSaver.from_conn_string(self.config.sqlite_path)
         if self._saver is None:
             self._saver = await self._saver_cm.__aenter__()
             self._saver_loop = current_loop
@@ -164,7 +165,9 @@ class Orchestrator:
                     },
                     room,
                 )
-                raise RuntimeError(_result_field(result, "error", "clarifying_pm failed"))
+                raise RuntimeError(
+                    _result_field(result, "error", "clarifying_pm failed")
+                )
 
             # Record actual spend and notify the UI if a threshold tier changed.
             # BudgetGuard exposes the highest crossed threshold as a float on
@@ -266,9 +269,8 @@ class Orchestrator:
             # PRD exists -- this is a real approval gate. In Slice 5 the
             # frontend will send {"decision": "approved" | "rejected"}; for the
             # mock smoke any non-empty input approves the PRD.
-            decision_value = (
-                decision.get("decision")
-                or ("approved" if decision.get("answer", "").strip() else "rejected")
+            decision_value = decision.get("decision") or (
+                "approved" if decision.get("answer", "").strip() else "rejected"
             )
             approved = decision_value == "approved"
             update: dict[str, Any] = {
@@ -395,10 +397,8 @@ class Orchestrator:
         task = self._tasks.pop(project_id, None)
         if task and not task.done():
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
-            except (asyncio.CancelledError, Exception):
-                pass
         self._resume_queues.pop(project_id, None)
 
     async def load(self, project_id: str) -> dict | None:
@@ -472,21 +472,25 @@ class Orchestrator:
         ts = 0
         for i in range(max(len(questions), len(answers))):
             if i < len(questions):
-                messages.append({
-                    "id": f"q{i}",
-                    "role": "agent",
-                    "agent": "clarifying_pm",
-                    "text": questions[i].get("text", ""),
-                    "timestamp": ts,
-                })
+                messages.append(
+                    {
+                        "id": f"q{i}",
+                        "role": "agent",
+                        "agent": "clarifying_pm",
+                        "text": questions[i].get("text", ""),
+                        "timestamp": ts,
+                    }
+                )
                 ts += 1
             if i < len(answers):
-                messages.append({
-                    "id": f"a{i}",
-                    "role": "user",
-                    "text": answers[i].get("text", ""),
-                    "timestamp": ts,
-                })
+                messages.append(
+                    {
+                        "id": f"a{i}",
+                        "role": "user",
+                        "text": answers[i].get("text", ""),
+                        "timestamp": ts,
+                    }
+                )
                 ts += 1
 
         # Pending approval exists once a PRD is on the table and not yet approved.

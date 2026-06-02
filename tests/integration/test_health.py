@@ -1,4 +1,5 @@
 """Test that FastAPI starts and /health returns 200 with expected payload."""
+
 from fastapi.testclient import TestClient
 
 from backend.main import app

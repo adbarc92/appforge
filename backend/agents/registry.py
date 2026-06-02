@@ -17,7 +17,6 @@ Key Features:
 import importlib
 import os
 import threading
-import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
@@ -26,7 +25,7 @@ from typing import Any
 import structlog
 import yaml
 
-from backend.agents.base_agent import AgentConfig, InstrumentedAgent, LLMConfig
+from backend.agents.base_agent import AgentConfig, InstrumentedAgent
 
 logger = structlog.get_logger(__name__)
 
@@ -207,9 +206,7 @@ class AgentRegistry:
         with self._lock:
             if agent_id not in self._configs:
                 available = list(self._configs.keys())
-                raise KeyError(
-                    f"Agent '{agent_id}' not found. Available: {available}"
-                )
+                raise KeyError(f"Agent '{agent_id}' not found. Available: {available}")
             return self._configs[agent_id]
 
     def _resolve_agent_class(
@@ -429,9 +426,7 @@ class AgentRegistry:
         """List only enabled agent IDs."""
         with self._lock:
             return [
-                agent_id
-                for agent_id, config in self._configs.items()
-                if config.enabled
+                agent_id for agent_id, config in self._configs.items() if config.enabled
             ]
 
     def get_agents_by_phase(self, phase: int) -> list[str]:

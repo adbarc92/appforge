@@ -9,13 +9,9 @@ Tests for the agent registry including:
 - Agent swapping (<10 LOC)
 """
 
-import tempfile
-from pathlib import Path
-
 import pytest
 import yaml
 
-from backend.agents.base_agent import AgentConfig, AgentTask, InstrumentedAgent
 from backend.agents.registry import AgentRegistry, get_registry, reset_registry
 
 
@@ -239,8 +235,6 @@ class TestHotReload:
             reload_interval=0.1,
         )
 
-        # Get initial agent
-        agent1 = registry.get_agent("test_agent")
         original_name = registry.get_config("test_agent").name
 
         # Modify config file

@@ -1,10 +1,10 @@
 """Tests for the Jinja2 prompt loader."""
+
 from pathlib import Path
 
 import pytest
 
-from backend.prompt_loader import load_prompt, _clear_cache
-
+from backend.prompt_loader import _clear_cache, load_prompt
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROMPTS_V1 = REPO_ROOT / "prompts" / "v1"

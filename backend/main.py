@@ -5,6 +5,7 @@ served by uvicorn on :8000. For local development, run:
 
     uv run -- python -m backend.main
 """
+
 from __future__ import annotations
 
 import uuid
@@ -131,7 +132,10 @@ async def load_project(sid: str, data: dict[str, Any]) -> dict | None:
 
 def main() -> None:
     import uvicorn
-    uvicorn.run("backend.main:asgi_app", host="127.0.0.1", port=8000, reload=config.debug)
+
+    uvicorn.run(
+        "backend.main:asgi_app", host="127.0.0.1", port=8000, reload=config.debug
+    )
 
 
 if __name__ == "__main__":

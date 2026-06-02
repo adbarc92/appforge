@@ -1,5 +1,6 @@
 """Reject the PRD repeatedly; verify feedback threads back and the third
 rejection surfaces an escalation flag on the approval gate."""
+
 import asyncio
 
 import pytest
@@ -41,8 +42,7 @@ async def test_three_rejections_escalate(tmp_path, monkeypatch):
         await orch.reject("proj-reject", comment)
         assert await wait_for("approval_required")
         assert not any(
-            e[0] == "approval_required" and e[1].get("escalation")
-            for e in received
+            e[0] == "approval_required" and e[1].get("escalation") for e in received
         ), f"should not escalate before the third rejection ({comment})"
 
     # Third rejection -> escalation flag.

@@ -3,6 +3,7 @@
 Reads templates from the root-level prompts/{version}/ directory. Caches
 rendered output when DEBUG is false (hot-reload when true).
 """
+
 from __future__ import annotations
 
 import os

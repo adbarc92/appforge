@@ -1,4 +1,5 @@
 """Verify a Socket.IO client can connect to the mounted ASGI app."""
+
 import asyncio
 
 import pytest
@@ -10,7 +11,9 @@ from backend.main import asgi_app
 
 @pytest.mark.asyncio
 async def test_socketio_client_can_connect():
-    server_config = uvicorn.Config(asgi_app, host="127.0.0.1", port=8765, log_level="warning")
+    server_config = uvicorn.Config(
+        asgi_app, host="127.0.0.1", port=8765, log_level="warning"
+    )
     server = uvicorn.Server(server_config)
     task = asyncio.create_task(server.serve())
     # Wait for the server to be ready

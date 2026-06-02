@@ -1,4 +1,5 @@
 """End-to-end Socket.IO tests: client sends events, server emits expected responses."""
+
 import asyncio
 
 import pytest
@@ -10,9 +11,7 @@ import uvicorn
 async def server_and_client():
     from backend.main import asgi_app  # reimport inside test to reset state if needed
 
-    config = uvicorn.Config(
-        asgi_app, host="127.0.0.1", port=8766, log_level="warning"
-    )
+    config = uvicorn.Config(asgi_app, host="127.0.0.1", port=8766, log_level="warning")
     server = uvicorn.Server(config)
     task = asyncio.create_task(server.serve())
     while not server.started:
@@ -53,9 +52,7 @@ async def test_start_project_with_empty_idea_returns_error(server_and_client):
 @pytest.mark.asyncio
 async def test_load_project_unknown_returns_error(server_and_client):
     server, client = server_and_client
-    ack = await client.call(
-        "load_project", {"project_id": "does-not-exist"}, timeout=2
-    )
+    ack = await client.call("load_project", {"project_id": "does-not-exist"}, timeout=2)
     assert ack == {"error": "project not found"}
 
 

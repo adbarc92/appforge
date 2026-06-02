@@ -11,6 +11,7 @@ The output shape matches what the orchestrator's `clarifying_node` expects:
     {"status": "success", "artifact": {"prd": "..."}, "cost": 0.0}
     {"status": "error", "error": "...", "recoverable": True}
 """
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, ValidationError
 
 from backend.agents.base_agent import (
-    AgentResult,
     AgentTask,
     InstrumentedAgent,
 )
@@ -141,7 +141,9 @@ class ClarifyingPMAgent(InstrumentedAgent):
         return {"status": "success", "artifact": artifact, "cost": 0.0}
 
     async def _call_with_retry(
-        self, prompt: str, force_synthesis: bool
+        self,
+        prompt: str,
+        force_synthesis: bool,  # noqa: ARG002 (reserved for forced-synthesis retry)
     ) -> tuple[str, ClarifyingResponse | None]:
         """Call the model up to twice, retrying once on malformed JSON."""
         text: str = ""
@@ -149,16 +151,14 @@ class ClarifyingPMAgent(InstrumentedAgent):
             messages = [
                 SystemMessage(
                     content=(
-                        "You are a senior product manager. "
-                        "Respond ONLY with JSON."
+                        "You are a senior product manager. " "Respond ONLY with JSON."
                     )
                 ),
                 HumanMessage(
                     content=(
                         prompt
                         if attempt == 1
-                        else prompt
-                        + "\n\nYour last response was not valid JSON. "
+                        else prompt + "\n\nYour last response was not valid JSON. "
                         "Respond with JSON only."
                     )
                 ),

@@ -234,7 +234,9 @@ class InstrumentedAgent(ABC):
             total_cost=self._total_cost,
         )
 
-    async def plan(self, task: AgentTask) -> dict[str, Any]:
+    async def plan(
+        self, task: AgentTask  # noqa: ARG002 (interface contract)
+    ) -> dict[str, Any]:
         """
         Plan the execution before running.
 

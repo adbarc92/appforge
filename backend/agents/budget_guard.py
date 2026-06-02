@@ -14,7 +14,6 @@ Threshold Actions:
 """
 
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -26,7 +25,6 @@ import yaml
 
 from backend.agents.base_agent import (
     AgentResult,
-    AgentStatus,
     AgentTask,
     InstrumentedAgent,
 )
@@ -283,9 +281,10 @@ class BudgetGuard(InstrumentedAgent):
 
         downgrade_rules = []
         for level in self.budget_config.get("budget", {}).get("warning_levels", []):
-            if (
-                level.get("action") == "auto_downgrade"
-                and self.state.spend_ratio >= level.get("threshold", 1.0)
+            if level.get(
+                "action"
+            ) == "auto_downgrade" and self.state.spend_ratio >= level.get(
+                "threshold", 1.0
             ):
                 downgrade_rules = level.get("downgrade_rules", [])
                 break
@@ -337,10 +336,8 @@ class BudgetGuard(InstrumentedAgent):
         Returns:
             True if override was successful
         """
-        max_overrides = (
-            self.budget_config.get("kill_switch", {}).get(
-                "max_overrides_per_project", 3
-            )
+        max_overrides = self.budget_config.get("kill_switch", {}).get(
+            "max_overrides_per_project", 3
         )
 
         if self.state.override_count >= max_overrides:
@@ -383,7 +380,9 @@ class BudgetGuard(InstrumentedAgent):
             "remaining": self.state.remaining,
             "spend_ratio": self.state.spend_ratio,
             "current_threshold": self.state.current_threshold,
-            "last_action": self.state.last_action.value if self.state.last_action else None,
+            "last_action": (
+                self.state.last_action.value if self.state.last_action else None
+            ),
             "paused": self.state.paused,
             "override_count": self.state.override_count,
             "downgraded_agents": self.state.downgraded_agents,

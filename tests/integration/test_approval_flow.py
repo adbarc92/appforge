@@ -5,6 +5,7 @@ loop: three mock answers produce a PRD, which surfaces as approval_required;
 approving it advances to the delivery_summarizer and emits a successful
 phase_complete.
 """
+
 import asyncio
 
 import pytest
@@ -106,8 +107,7 @@ async def test_reject_routes_back_to_clarifying(tmp_path, monkeypatch):
         timeout=6.0,
     )
     assert not any(
-        e[0] == "phase_complete" and e[1].get("status") == "success"
-        for e in received
+        e[0] == "phase_complete" and e[1].get("status") == "success" for e in received
     ), "rejection must not complete the phase"
 
     await orch.stop("proj-rej")

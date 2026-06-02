@@ -15,7 +15,6 @@ import structlog
 
 from backend.agents.base_agent import (
     AgentResult,
-    AgentStatus,
     AgentTask,
     InstrumentedAgent,
 )
@@ -33,15 +32,15 @@ class MockAgent(InstrumentedAgent):
     - Simulated cost tracking
     """
 
-    async def execute(self, task: AgentTask) -> AgentResult:
+    async def execute(
+        self, task: AgentTask  # noqa: ARG002 (mock ignores task)
+    ) -> AgentResult:
         """Execute a mock task with configurable behavior."""
         # Get config values with defaults
         delay = self.config.get("delay", 1.0)
         success_rate = self.config.get("success_rate", 1.0)
         error_message = self.config.get("error_message", "Mock agent error")
-        mock_output = self.config.get(
-            "mock_output", f"Mock output from {self.name}"
-        )
+        mock_output = self.config.get("mock_output", f"Mock output from {self.name}")
 
         # Log mock execution
         self.logger.info(

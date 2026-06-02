@@ -1,4 +1,5 @@
 """Round-trip checkpoint persistence across two Orchestrator instances."""
+
 import asyncio
 
 import pytest
@@ -22,7 +23,9 @@ async def test_checkpoint_round_trip(tmp_path, monkeypatch):
     await orch1.run("proj-persist", "build a thing", emit)
     for _ in range(40):
         await asyncio.sleep(0.05)
-        if any(e[0] == "agent_status" and e[1].get("status") == "running" for e in received):
+        if any(
+            e[0] == "agent_status" and e[1].get("status") == "running" for e in received
+        ):
             break
     await orch1.stop("proj-persist")
 

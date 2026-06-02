@@ -4,6 +4,7 @@ Drives the real ASGI app over a localhost socket through the whole Phase 3
 flow: idea -> three clarifying answers -> PRD approval gate -> approve ->
 phase_complete. Mock agents keep it deterministic and offline.
 """
+
 import asyncio
 
 import pytest
@@ -35,6 +36,7 @@ async def test_phase3_happy_path(tmp_path, monkeypatch):
         "phase_complete",
         "project_state",
     ):
+
         def make(name):
             def handler(data):
                 events.append((name, data))
@@ -62,9 +64,7 @@ async def test_phase3_happy_path(tmp_path, monkeypatch):
         # Feed three answers to trigger the mock's PRD, draining each question.
         for _ in range(3):
             await wait_for("agent_message")
-            await client.emit(
-                "user_message", {"project_id": project_id, "text": "ok"}
-            )
+            await client.emit("user_message", {"project_id": project_id, "text": "ok"})
             events[:] = [e for e in events if e[0] != "agent_message"]
 
         approval = await wait_for("approval_required")

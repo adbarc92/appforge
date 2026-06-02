@@ -1,15 +1,19 @@
 """Tests for backend.config — environment and YAML loading."""
-import os
-from pathlib import Path
-
-import pytest
 
 from backend.config import Config
 
 
 def test_config_defaults_when_env_missing(monkeypatch, tmp_path):
-    for var in ("ANTHROPIC_API_KEY", "MOCK_AGENTS", "DEBUG", "BUDGET_LIMIT",
-                "ANTHROPIC_MODEL", "SQLITE_PATH", "MAX_CLARIFYING_QUESTIONS", "LOG_LEVEL"):
+    for var in (
+        "ANTHROPIC_API_KEY",
+        "MOCK_AGENTS",
+        "DEBUG",
+        "BUDGET_LIMIT",
+        "ANTHROPIC_MODEL",
+        "SQLITE_PATH",
+        "MAX_CLARIFYING_QUESTIONS",
+        "LOG_LEVEL",
+    ):
         monkeypatch.delenv(var, raising=False)
     cfg = Config.load()
     assert cfg.mock_agents is True

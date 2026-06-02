@@ -7,9 +7,11 @@ form so the frontend can render them. Execution flow for this sub-project:
 
 Rejection from product_owner_approval routes back to clarifying_pm for revision.
 """
+
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, Literal
+from collections.abc import Awaitable, Callable
+from typing import Any, Literal
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
@@ -30,7 +32,9 @@ class ProjectState(BaseModel):
     questions: list[Question] = Field(default_factory=list)
     answers: list[Answer] = Field(default_factory=list)
     prd: str | None = None
-    approval_status: Literal["pending", "approved", "rejected", "modified"] | None = None
+    approval_status: Literal["pending", "approved", "rejected", "modified"] | None = (
+        None
+    )
     approval_count: int = 0
     pending_input: str | None = None
     rejection_comments: list[str] = Field(default_factory=list)
