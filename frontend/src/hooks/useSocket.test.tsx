@@ -63,4 +63,19 @@ describe("useSocket", () => {
     expect(useProjectStore.getState().approvalPending?.phase).toBe(3);
     expect(useProjectStore.getState().prd).toBe("# PRD");
   });
+
+  test("phase_complete clears approvalPending and prd", () => {
+    renderHook(() => useSocket());
+    useProjectStore.getState().setApprovalPending({
+      agent: "clarifying_pm", phase: 3, content: "# PRD",
+    });
+    useProjectStore.getState().setPRD("# PRD");
+    act(() => {
+      for (const cb of listeners.phase_complete ?? []) {
+        cb({ phase: 3, summary: "PRD approved", status: "success" });
+      }
+    });
+    expect(useProjectStore.getState().approvalPending).toBeNull();
+    expect(useProjectStore.getState().prd).toBeNull();
+  });
 });

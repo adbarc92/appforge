@@ -68,6 +68,10 @@ export function useSocket(): UseSocketApi {
         text: `Phase ${p.phase} ${p.status ?? "complete"}: ${p.summary}`,
         timestamp: Date.now(),
       });
+      // The approval gate is resolved once the phase completes; clear the
+      // card and the draft PRD so the UI reflects the finished state.
+      useProjectStore.getState().setApprovalPending(null);
+      useProjectStore.getState().setPRD(null);
     };
     const onProjectState = (p: ProjectStateSnapshot) => {
       useProjectStore.getState().hydrateFromState(p);

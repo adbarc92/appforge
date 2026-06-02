@@ -113,6 +113,7 @@ export function ChatInterface() {
                 />
                 <button
                   type="button"
+                  data-testid="modify-send"
                   className="px-3 py-1 bg-blue-700 text-white text-sm rounded"
                   onClick={() => {
                     if (modifyDraft.trim()) {
