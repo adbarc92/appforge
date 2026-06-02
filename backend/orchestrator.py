@@ -508,7 +508,7 @@ class Orchestrator:
                 await emit(
                     "phase_complete",
                     {
-                        "phase": 3,
+                        "phase": 4 if self.config.enable_phase4 else 3,
                         "summary": str(exc),
                         "status": "failed",
                         "reason": "exception",
