@@ -30,12 +30,21 @@ export interface BudgetState {
   threshold: number; // 0, 50, 75, 85, 95, 100
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  owner_agent: string;
+  depends_on: string[];
+}
+
 export interface ApprovalRequest {
   agent: string;
   phase: number;
   content: string; // markdown PRD
   alternatives?: string[];
   escalation?: boolean;
+  kind?: "prd" | "plan";
 }
 
 export interface ProjectStateSnapshot {
@@ -48,6 +57,9 @@ export interface ProjectStateSnapshot {
   phase: number;
   prd: string | null;
   status: "running" | "paused" | "complete" | "failed";
+  adr?: string | null;
+  tasks?: Task[];
+  design_spec?: Record<string, unknown> | null;
 }
 
 // Client -> server event payloads

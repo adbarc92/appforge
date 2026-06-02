@@ -70,4 +70,13 @@ describe("projectStore", () => {
     expect(useProjectStore.getState().messages).toHaveLength(1);
     expect(useProjectStore.getState().agents.clarifying_pm.status).toBe("complete");
   });
+
+  test("setPlanningArtifact stores adr/tasks/design", () => {
+    useProjectStore.getState().setPlanningArtifact("adr", "# ADR");
+    useProjectStore.getState().setPlanningArtifact("tasks", [{ id: "T1", title: "x", description: "y", owner_agent: "backend", depends_on: [] }]);
+    useProjectStore.getState().setPlanningArtifact("design", { tokens: {}, components: [] });
+    expect(useProjectStore.getState().adr).toContain("ADR");
+    expect(useProjectStore.getState().tasks).toHaveLength(1);
+    expect(useProjectStore.getState().designSpec).not.toBeNull();
+  });
 });

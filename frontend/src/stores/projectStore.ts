@@ -7,6 +7,7 @@ import type {
   BudgetState,
   Message,
   ProjectStateSnapshot,
+  Task,
 } from "../types";
 
 const AGENT_NAMES: Record<string, string> = {
@@ -45,6 +46,9 @@ interface ProjectStore {
   phase: number;
   prd: string | null;
   status: "idle" | "running" | "paused" | "complete" | "failed";
+  adr: string | null;
+  tasks: Task[];
+  designSpec: Record<string, unknown> | null;
 
   reset: (projectId?: string, idea?: string) => void;
   addMessage: (message: Message) => void;
@@ -52,6 +56,7 @@ interface ProjectStore {
   setApprovalPending: (req: ApprovalRequest | null) => void;
   setBudget: (budget: BudgetState) => void;
   setPRD: (prd: string | null) => void;
+  setPlanningArtifact: (kind: "adr" | "tasks" | "design", value: unknown) => void;
   hydrateFromState: (snap: ProjectStateSnapshot) => void;
 }
 
@@ -65,6 +70,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   phase: 0,
   prd: null,
   status: "idle",
+  adr: null,
+  tasks: [],
+  designSpec: null,
 
   reset: (projectId, idea) =>
     set({
@@ -77,6 +85,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       phase: 0,
       prd: null,
       status: projectId ? "running" : "idle",
+      adr: null,
+      tasks: [],
+      designSpec: null,
     }),
 
   addMessage: (message) =>
@@ -96,6 +107,16 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   setPRD: (prd) => set({ prd }),
 
+  setPlanningArtifact: (kind, value) => {
+    if (kind === "adr") {
+      set({ adr: value as string });
+    } else if (kind === "tasks") {
+      set({ tasks: value as Task[] });
+    } else {
+      set({ designSpec: value as Record<string, unknown> });
+    }
+  },
+
   hydrateFromState: (snap) =>
     set({
       projectId: snap.project_id,
@@ -107,5 +128,8 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       phase: snap.phase,
       prd: snap.prd,
       status: snap.status,
+      adr: snap.adr ?? null,
+      tasks: snap.tasks ?? [],
+      designSpec: snap.design_spec ?? null,
     }),
 }));
