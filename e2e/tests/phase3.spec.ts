@@ -24,8 +24,13 @@ test("happy path: idea -> clarify -> approve -> phase complete", async ({ page }
   await driveToApprovalGate(page);
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText(/Phase 3 success/)).toBeVisible();
-  // The clear-on-phase_complete fix removes the gate.
-  await expect(page.getByText("Approval needed")).toBeHidden();
+  // NOTE: with ENABLE_PHASE4=true (set in playwright.config.ts webServer.env for
+  // the whole run), approving the PRD does NOT end the flow — the planning sprint
+  // runs and a fresh "plan" approval gate re-opens. The old post-approve
+  // toBeHidden("Approval needed") would race that re-open and is therefore wrong
+  // here. The full phase-4 path (plan renders -> approve plan -> card hidden) is
+  // covered end-to-end by phase4.spec.ts; this spec only asserts the preserved
+  // phase-3 success emit.
 });
 
 test("revision cycle: reject then modify -> revised PRD", async ({ page }) => {
