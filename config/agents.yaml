@@ -79,13 +79,13 @@ agents:
       temperature: 0.4
       max_tokens: 8192
 
-  # Phase 5 - Design
+  # Phase 4 - Parallel Planning (Design)
   uiux_designer:
     name: "UI/UX Designer Agent"
     role: "Product Designer"
     description: "Creates Tailwind design systems, component specs, and mockup PNGs"
     approval_required: true
-    phase_introduced: 5
+    phase_introduced: 4
     llm:
       provider: "anthropic"
       model: "claude-3-5-sonnet-20241022"
