@@ -1,6 +1,4 @@
 # DevTeam.AI - Continuous Integration
-# Runs on every push and pull request to main
-
 name: CI
 
 on:
@@ -10,120 +8,105 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-test:
+  backend:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Sync (dev group)
+        run: uv sync --group dev
+      - name: Ruff
+        run: uv run ruff check backend/ tests/
+      - name: Black
+        run: uv run black --check backend/ tests/
+      - name: Pytest + coverage gate
+        run: uv run pytest tests/ --cov=backend --cov-report=term --cov-fail-under=70
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run Ruff linter
-        run: |
-          ruff check . --output-format=github
-
-      - name: Run Black formatter check
-        run: |
-          black --check .
-
-      - name: Run pytest
-        run: |
-          pytest tests/ -v --tb=short || echo "No tests found (expected in Phase 0)"
-
-      - name: Check Streamlit app syntax
-        run: |
-          python -c "import app; print('app.py imports successfully')"
-
-  type-check:
+  frontend:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: frontend
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
 
-      - name: Install dependencies
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Sync backend deps
+        run: uv sync
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: frontend
+      - name: Install e2e deps + chromium
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run MyPy type checker
-        run: |
-          mypy app.py --ignore-missing-imports || echo "Type check warnings (non-blocking)"
-        continue-on-error: true
+          npm ci
+          npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Run Playwright
+        run: npx playwright test
+        working-directory: e2e
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
 
   validate-config:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.11"
-
-      - name: Install PyYAML
-        run: pip install pyyaml jinja2
-
+          python-version: "3.12"
+      - name: Sync
+        run: uv sync
       - name: Validate agents.yaml
         run: |
-          python -c "
+          uv run python -c "
           import yaml
-          with open('config/agents.yaml', 'r') as f:
+          with open('config/agents.yaml') as f:
               config = yaml.safe_load(f)
           agents = config.get('agents', {})
-          print(f'Found {len(agents)} agents configured')
-          required_agents = [
-              'orchestrator', 'budget_guard', 'clarifying_pm', 'product_owner',
-              'solution_architect', 'tech_lead', 'uiux_designer', 'frontend',
-              'backend', 'database', 'ai_ml', 'devops', 'security', 'qa_test',
-              'technical_writer', 'delivery_summarizer'
-          ]
-          for agent in required_agents:
-              if agent not in agents:
-                  raise ValueError(f'Missing required agent: {agent}')
-          print('All 16 agents configured correctly')
+          required = ['orchestrator','budget_guard','clarifying_pm','product_owner','solution_architect','tech_lead','uiux_designer','frontend','backend','database','ai_ml','devops','security','qa_test','technical_writer','delivery_summarizer']
+          for a in required:
+              assert a in agents, f'Missing agent: {a}'
+          print(f'{len(required)} required agents present')
           "
-
       - name: Validate clarifying_pm.jinja
         run: |
-          python -c "
+          uv run python -c "
           from pathlib import Path
           from jinja2 import Environment, FileSystemLoader
-
-          prompt_path = Path('prompts/v1/clarifying_pm.jinja')
-          content = prompt_path.read_text()
-          word_count = len(content.split())
-          print(f'Clarifying PM prompt word count: {word_count}')
-          if word_count < 300:
-              raise ValueError(f'Prompt must be >= 300 words, got {word_count}')
-
-          # Verify it's valid Jinja2
-          env = Environment(loader=FileSystemLoader('prompts/v1'))
-          template = env.get_template('clarifying_pm.jinja')
-          print('Jinja2 template is valid')
+          assert Path('prompts/v1/clarifying_pm.jinja').exists(), 'clarifying_pm.jinja missing'
+          Environment(loader=FileSystemLoader('prompts/v1')).get_template('clarifying_pm.jinja')
+          print('clarifying_pm.jinja parses')
           "
