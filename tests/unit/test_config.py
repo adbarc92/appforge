@@ -53,9 +53,9 @@ def test_config_loads_yaml_files():
     assert cfg.llm_yaml
 
 
-def test_enable_phase4_defaults_false(monkeypatch):
+def test_enable_phase4_defaults_true(monkeypatch):
     monkeypatch.delenv("ENABLE_PHASE4", raising=False)
-    assert Config.load().enable_phase4 is False
+    assert Config.load().enable_phase4 is True
 
 
 def test_enable_phase4_reads_env(monkeypatch):
