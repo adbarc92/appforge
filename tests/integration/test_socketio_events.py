@@ -105,6 +105,9 @@ async def test_load_project_hydrates_persisted_state(server_and_client):
         "phase",
         "prd",
         "status",
+        "adr",
+        "tasks",
+        "design_spec",
     }
     assert snap["project_id"] == project_id
     assert snap["idea"] == "build a todo app"

@@ -43,6 +43,12 @@ EmitCallback = Callable[[str, dict[str, Any]], Awaitable[None] | None]
 # still works fine, including the Mock<Class> fallback in mock_agent).
 _REAL_AGENT_CLASSES: dict[str, tuple[str, str]] = {
     "clarifying_pm": ("backend.agents.clarifying_pm", "ClarifyingPMAgent"),
+    "solution_architect": (
+        "backend.agents.solution_architect",
+        "SolutionArchitectAgent",
+    ),
+    "tech_lead": ("backend.agents.tech_lead", "TechLeadAgent"),
+    "uiux_designer": ("backend.agents.uiux_designer", "UiuxDesignerAgent"),
 }
 
 

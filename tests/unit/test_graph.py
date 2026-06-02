@@ -32,5 +32,42 @@ async def test_build_graph_compiles_with_three_nodes():
         assert required in node_names, f"missing node: {required}"
 
 
+def test_projectstate_has_planning_fields():
+    from backend.graph import ProjectState, Task
+
+    s = ProjectState()
+    assert s.adr is None
+    assert s.tasks == []
+    assert s.design_spec is None
+    assert s.planning_approval_status is None
+    assert s.planning_approval_count == 0
+    assert s.planning_rejection_comments == []
+
+    t = Task(id="t1", title="Build login", description="...", owner_agent="backend")
+    assert t.depends_on == []
+
+
+def test_build_graph_phase4_has_planning_nodes():
+    from backend.graph import build_graph
+
+    graph = build_graph(checkpointer=None, enable_phase4=True)
+    node_names = set(graph.get_graph().nodes.keys())
+    for n in [
+        "solution_architect",
+        "tech_lead",
+        "uiux_designer",
+        "planning_fan_in",
+        "planning_approval",
+    ]:
+        assert n in node_names
+
+
+def test_build_graph_flag_off_compiles_phase3_only():
+    from backend.graph import build_graph
+
+    graph = build_graph(checkpointer=None, enable_phase4=False)
+    assert graph is not None
+
+
 # Markers for test categorization
 pytestmark = [pytest.mark.unit]

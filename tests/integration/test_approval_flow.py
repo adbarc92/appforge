@@ -24,6 +24,11 @@ async def _wait_for(predicate, received, timeout: float = 5.0) -> None:
 @pytest.mark.asyncio
 async def test_approval_required_emitted_and_resume_on_approve(tmp_path, monkeypatch):
     monkeypatch.setenv("MOCK_AGENTS", "true")
+    # Pin to the Phase-3-only contract: approving the PRD must complete the run
+    # at phase 3 (no planning fan-out). Phase 4 is the default now, so disable it
+    # explicitly here. Orchestrator() reads Config.load() at construction, so
+    # this env var must be set before the Orchestrator is created below.
+    monkeypatch.setenv("ENABLE_PHASE4", "false")
     monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "chk.db"))
     received: list = []
 
@@ -71,6 +76,8 @@ async def test_approval_required_emitted_and_resume_on_approve(tmp_path, monkeyp
 async def test_reject_routes_back_to_clarifying(tmp_path, monkeypatch):
     """Rejecting a PRD routes back to clarifying_pm (a fresh question is asked)."""
     monkeypatch.setenv("MOCK_AGENTS", "true")
+    # Pin to the Phase-3-only contract (see note in the approve test above).
+    monkeypatch.setenv("ENABLE_PHASE4", "false")
     monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "chk.db"))
     received: list = []
 

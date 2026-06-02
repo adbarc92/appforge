@@ -27,6 +27,7 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         MOCK_AGENTS: "true",
+        ENABLE_PHASE4: "true",
         DEBUG: "false", // avoid uvicorn reload mode (orphaned subprocess on teardown)
         LOG_LEVEL: "WARNING",
         SQLITE_PATH: "./e2e/.pw-checkpoints.db",

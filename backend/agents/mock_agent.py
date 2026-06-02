@@ -143,21 +143,78 @@ class ProductOwnerAgent(MockAgent):
 
 
 class SolutionArchitectAgent(MockAgent):
-    """Mock solution architect agent."""
+    """Mock Solution Architect — returns an ADR artifact."""
 
-    pass
+    async def execute(self, task: Any) -> dict[str, Any]:  # type: ignore[override]
+        task_dict = task if isinstance(task, dict) else {}
+        rejections = task_dict.get("rejection_comments", []) or []
+        revision = f" (revision {len(rejections)})" if rejections else ""
+        return {
+            "status": "success",
+            "artifact": {
+                "adr": (
+                    f"# ADR{revision}\n\n"
+                    "## Context\nMock context derived from the PRD.\n\n"
+                    "## Decision\nUse a mock stack.\n\n"
+                    "## Alternatives\n- Option A\n- Option B\n\n"
+                    "## Consequences\nMock trade-offs.\n"
+                )
+            },
+            "cost": 0.0,
+        }
 
 
 class TechLeadAgent(MockAgent):
-    """Mock tech lead agent."""
+    """Mock Tech Lead — returns a structured task breakdown."""
 
-    pass
+    async def execute(self, task: Any) -> dict[str, Any]:  # type: ignore[override]
+        task_dict = task if isinstance(task, dict) else {}
+        rejections = task_dict.get("rejection_comments", []) or []
+        suffix = " (revision 1)" if rejections else ""
+        return {
+            "status": "success",
+            "artifact": {
+                "tasks": [
+                    {
+                        "id": "T1",
+                        "title": f"Build the backend{suffix}",
+                        "description": "Implement the API.",
+                        "owner_agent": "backend",
+                        "depends_on": [],
+                    },
+                    {
+                        "id": "T2",
+                        "title": "Build the frontend",
+                        "description": "Implement the UI.",
+                        "owner_agent": "frontend",
+                        "depends_on": ["T1"],
+                    },
+                ]
+            },
+            "cost": 0.0,
+        }
 
 
 class UiuxDesignerAgent(MockAgent):
-    """Mock UI/UX designer agent."""
+    """Mock UI/UX Designer — returns a design-spec dict (no PNG)."""
 
-    pass
+    async def execute(self, task: Any) -> dict[str, Any]:  # type: ignore[override]
+        task_dict = task if isinstance(task, dict) else {}
+        rejections = task_dict.get("rejection_comments", []) or []
+        primary = "#2563eb" if not rejections else "#16a34a"
+        return {
+            "status": "success",
+            "artifact": {
+                "design_spec": {
+                    "tokens": {"colorPrimary": primary, "radius": "0.5rem"},
+                    "components": [
+                        {"type": "Header", "tailwind": "bg-blue-600 text-white p-4"},
+                        {"type": "List", "tailwind": "divide-y"},
+                    ],
+                }
+            },
+            "cost": 0.0,
+        }
 
 
 class FrontendAgent(MockAgent):

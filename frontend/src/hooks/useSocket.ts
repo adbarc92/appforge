@@ -40,10 +40,18 @@ function attachListeners(socket: Socket): void {
   });
   socket.on("approval_required", (p: ApprovalRequest) => {
     useProjectStore.getState().setApprovalPending(p);
-    useProjectStore.getState().setPRD(p.content);
+    // Only set the PRD for the PRD approval gate (phase 3). When kind is
+    // "plan" (phase 4 planning gate) we must NOT overwrite the already-approved
+    // PRD that lives in the store.
+    if (p.kind !== "plan") {
+      useProjectStore.getState().setPRD(p.content);
+    }
   });
   socket.on("budget_update", (p: BudgetUpdatePayload) => {
     useProjectStore.getState().setBudget(p);
+  });
+  socket.on("planning_artifact", (p: { kind: "adr" | "tasks" | "design"; content: unknown }) => {
+    useProjectStore.getState().setPlanningArtifact(p.kind, p.content);
   });
   socket.on("phase_complete", (p: PhaseCompletePayload) => {
     useProjectStore.getState().addMessage({
@@ -52,10 +60,10 @@ function attachListeners(socket: Socket): void {
       text: `Phase ${p.phase} ${p.status ?? "complete"}: ${p.summary}`,
       timestamp: Date.now(),
     });
-    // The approval gate is resolved once the phase completes; clear the card
-    // and the draft PRD so the UI reflects the finished state.
+    // Resolve the approval card UI. We intentionally do NOT clear the prd here:
+    // a phase_complete for the planning gate fires while the approved PRD is
+    // still needed for downstream agents (solution_architect reads it).
     useProjectStore.getState().setApprovalPending(null);
-    useProjectStore.getState().setPRD(null);
   });
   socket.on("project_state", (p: ProjectStateSnapshot) => {
     useProjectStore.getState().hydrateFromState(p);

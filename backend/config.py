@@ -56,6 +56,7 @@ class Config:
     anthropic_model: str
     sqlite_path: str
     max_clarifying_questions: int
+    enable_phase4: bool
     agents_yaml: dict[str, Any] = field(default_factory=dict)
     budget_yaml: dict[str, Any] = field(default_factory=dict)
     llm_yaml: dict[str, Any] = field(default_factory=dict)
@@ -72,6 +73,7 @@ class Config:
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
             sqlite_path=os.getenv("SQLITE_PATH", default_sqlite),
             max_clarifying_questions=_env_int("MAX_CLARIFYING_QUESTIONS", 6),
+            enable_phase4=_env_bool("ENABLE_PHASE4", True),
             agents_yaml=_load_yaml(CONFIG_DIR / "agents.yaml"),
             budget_yaml=_load_yaml(CONFIG_DIR / "budget.yaml"),
             llm_yaml=_load_yaml(CONFIG_DIR / "llm.yaml"),

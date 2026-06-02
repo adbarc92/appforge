@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useSocket } from "../hooks/useSocket";
 import { useProjectStore } from "../stores/projectStore";
+import { PlanViewer } from "./PlanViewer";
 import { PRDViewer } from "./PRDViewer";
 
 function parseCommand(text: string): { cmd: string; arg?: string } | null {
@@ -15,6 +16,9 @@ export function ChatInterface() {
   const { sendMessage, approve, reject, modify, retry } = useSocket();
   const messages = useProjectStore((s) => s.messages);
   const prd = useProjectStore((s) => s.prd);
+  const adr = useProjectStore((s) => s.adr);
+  const tasks = useProjectStore((s) => s.tasks);
+  const designSpec = useProjectStore((s) => s.designSpec);
   const approvalPending = useProjectStore((s) => s.approvalPending);
   const [draft, setDraft] = useState("");
   const [modifyDraft, setModifyDraft] = useState("");
@@ -72,6 +76,9 @@ export function ChatInterface() {
             <div className="text-xs font-semibold mb-1 text-gray-500">Draft PRD</div>
             <PRDViewer markdown={prd} />
           </div>
+        )}
+        {(adr || tasks.length > 0 || designSpec) && (
+          <PlanViewer adr={adr} tasks={tasks} designSpec={designSpec} />
         )}
         {approvalPending && (
           <div className="bg-yellow-50 border border-yellow-300 rounded p-3 space-y-2">

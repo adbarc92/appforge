@@ -6,6 +6,8 @@ phase_complete. Mock agents keep it deterministic and offline.
 """
 
 import asyncio
+import importlib
+import sys
 
 import pytest
 import socketio
@@ -15,7 +17,23 @@ import uvicorn
 @pytest.mark.asyncio
 async def test_phase3_happy_path(tmp_path, monkeypatch):
     monkeypatch.setenv("MOCK_AGENTS", "true")
+    # Pin to the Phase-3-only contract: this test approves the PRD and expects
+    # the run to COMPLETE at phase 3 (no planning fan-out). Phase 4 is the
+    # default now, so disable it explicitly. backend.main calls Config.load()
+    # and constructs the Orchestrator at module scope, so ENABLE_PHASE4 must be
+    # visible before that module is (re-)imported. Reload the backend module
+    # chain after setenv so a fresh Config is picked up even when these modules
+    # were already imported by an earlier test in the same session.
+    monkeypatch.setenv("ENABLE_PHASE4", "false")
     monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "e2e.db"))
+
+    for mod_name in (
+        "backend.config",
+        "backend.orchestrator",
+        "backend.main",
+    ):
+        if mod_name in sys.modules:
+            importlib.reload(sys.modules[mod_name])
 
     from backend.main import asgi_app
 
