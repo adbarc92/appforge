@@ -44,6 +44,49 @@ def _result_field(result: Any, field: str, default: Any = None) -> Any:
     return getattr(result, field, default)
 
 
+def _state_attr(state_like: Any, field: str, default: Any = None) -> Any:
+    """Read a field from a ProjectState-like object OR a plain dict (load()'s dump)."""
+    if isinstance(state_like, dict):
+        return state_like.get(field, default)
+    return getattr(state_like, field, default)
+
+
+def _task_attr(task: Any, field: str, default: Any = None) -> Any:
+    """Read a task field whether the task is a dict (load() dump) or a Task model."""
+    if isinstance(task, dict):
+        return task.get(field, default)
+    return getattr(task, field, default)
+
+
+def _render_plan(state_like: Any) -> str:
+    """Render ADR + tasks + design into the combined-plan markdown.
+
+    Tolerates both a ProjectState-like object (the live graph state) and a
+    plain dict (what load() returns from model_dump). Tasks may likewise be
+    Task models or plain dicts, so attribute access goes through _task_attr.
+    """
+    adr = _state_attr(state_like, "adr") or ""
+    tasks = _state_attr(state_like, "tasks") or []
+    design_spec = _state_attr(state_like, "design_spec")
+
+    lines = [
+        "# Implementation Plan",
+        "",
+        "## Architecture Decision Record",
+        adr,
+    ]
+    lines += ["", "## Tasks"]
+    for t in tasks:
+        depends_on = _task_attr(t, "depends_on") or []
+        dep = f" (depends on {', '.join(depends_on)})" if depends_on else ""
+        title = _task_attr(t, "title", "")
+        owner = _task_attr(t, "owner_agent", "")
+        description = _task_attr(t, "description", "")
+        lines.append(f"- **{title}** — _{owner}_{dep}: {description}")
+    lines += ["", "## Design", "```json", str(design_spec), "```"]
+    return "\n".join(lines)
+
+
 class Orchestrator:
     """Owns the per-project asyncio tasks and drives the LangGraph workflow."""
 
@@ -394,22 +437,6 @@ class Orchestrator:
             "uiux_designer", "design_spec", "design_spec", "design"
         )
 
-        def _render_plan(state: ProjectState) -> str:
-            lines = [
-                "# Implementation Plan",
-                "",
-                "## Architecture Decision Record",
-                state.adr or "",
-            ]
-            lines += ["", "## Tasks"]
-            for t in state.tasks:
-                dep = f" (depends on {', '.join(t.depends_on)})" if t.depends_on else ""
-                lines.append(
-                    f"- **{t.title}** — _{t.owner_agent}_{dep}: {t.description}"
-                )
-            lines += ["", "## Design", "```json", str(state.design_spec), "```"]
-            return "\n".join(lines)
-
         async def planning_fan_in_node(state: ProjectState) -> dict[str, Any]:
             await emit(
                 "approval_required",
@@ -588,6 +615,9 @@ class Orchestrator:
     _AGENT_DISPLAY_NAMES = {
         "orchestrator": "Orchestrator",
         "clarifying_pm": "Clarifying PM",
+        "solution_architect": "Solution Architect",
+        "tech_lead": "Tech Lead",
+        "uiux_designer": "UI/UX Designer",
         "delivery_summarizer": "Delivery Summarizer",
     }
 
@@ -608,6 +638,13 @@ class Orchestrator:
         phase = state.get("current_phase", 3)
         approval_count = state.get("approval_count", 0)
         approved = state.get("approval_status") == "approved"
+
+        # Phase 4 planning artifacts / gate state.
+        adr = state.get("adr")
+        tasks = state.get("tasks", []) or []
+        design_spec = state.get("design_spec")
+        planning_status = state.get("planning_approval_status")
+        planning_count = state.get("planning_approval_count", 0)
 
         # Reconstruct the transcript from interleaved questions/answers. The
         # checkpoint stores no real timestamps, so use a monotonic counter for
@@ -639,9 +676,34 @@ class Orchestrator:
                 )
                 ts += 1
 
-        # Pending approval exists once a PRD is on the table and not yet approved.
+        # The planning gate is live once the PRD is approved and the three
+        # planning agents have all produced artifacts, but the plan is not yet
+        # approved. planning_fan_in emits the card and returns {} without
+        # setting planning_approval_status, so the durable state at the gate has
+        # planning_approval_status == None (it only becomes approved/rejected
+        # after the user responds). We therefore detect the gate from the
+        # artifacts being present rather than relying on a "pending" marker;
+        # an explicit "pending"/"rejected" status also counts. A "rejected"
+        # status means a re-run is in flight, but with all artifacts repopulated
+        # the card is shown again, matching the live fan-in behaviour.
+        #
+        # Mid-fan-out (PRD approved, only some artifacts present) does NOT
+        # satisfy `all(...)`, so it correctly stays "running" with no card.
+        planning_artifacts_ready = bool(adr) and bool(tasks) and bool(design_spec)
+        planning_gate = (
+            approved and planning_artifacts_ready and planning_status != "approved"
+        )
+
         approval_pending: dict[str, Any] | None = None
-        if prd and not approved:
+        if planning_gate:
+            approval_pending = {
+                "agent": "tech_lead",
+                "phase": 4,
+                "kind": "plan",
+                "content": _render_plan(state),
+                "escalation": planning_count >= 3,
+            }
+        elif prd and not approved:
             approval_pending = {
                 "agent": "clarifying_pm",
                 "phase": 3,
@@ -667,12 +729,20 @@ class Orchestrator:
                 "complete" if prd else ("running" if questions else "pending"),
             ),
         }
+        # Mark a planning agent complete once its artifact field is populated.
+        for agent_id, artifact in (
+            ("solution_architect", adr),
+            ("tech_lead", tasks),
+            ("uiux_designer", design_spec),
+        ):
+            if artifact:
+                agents[agent_id] = _node(agent_id, "complete")
         if phase >= 4:
             agents["delivery_summarizer"] = _node("delivery_summarizer", "complete")
 
         if phase >= 4:
             status = "complete"
-        elif prd and not approved:
+        elif planning_gate or (prd and not approved):
             status = "paused"
         else:
             status = "running"
@@ -692,6 +762,9 @@ class Orchestrator:
             "phase": phase,
             "prd": prd,
             "status": status,
+            "adr": adr,
+            "tasks": tasks,
+            "design_spec": design_spec,
         }
 
     async def _await_resume(self, project_id: str) -> dict:
