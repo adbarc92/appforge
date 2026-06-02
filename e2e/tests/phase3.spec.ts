@@ -9,7 +9,7 @@ async function driveToApprovalGate(page: Page) {
 
   for (const n of [1, 2, 3]) {
     await expect(
-      page.getByText(new RegExp(`Clarifying question #${n}`)).first(),
+      page.getByText(new RegExp(`Clarifying question #${n}`)),
     ).toBeVisible();
     // Chat input placeholder is long; match a stable prefix (regex, not exact).
     await page.getByPlaceholder(/Describe your idea/).fill(`answer ${n}`);
@@ -23,7 +23,7 @@ async function driveToApprovalGate(page: Page) {
 test("happy path: idea -> clarify -> approve -> phase complete", async ({ page }) => {
   await driveToApprovalGate(page);
   await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByText(/Phase 3 success/).first()).toBeVisible();
+  await expect(page.getByText(/Phase 3 success/)).toBeVisible();
   // The clear-on-phase_complete fix removes the gate.
   await expect(page.getByText("Approval needed")).toBeHidden();
 });

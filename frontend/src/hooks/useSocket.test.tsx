@@ -23,7 +23,6 @@ import { useProjectStore } from "../stores/projectStore";
 describe("useSocket", () => {
   beforeEach(() => {
     useProjectStore.getState().reset();
-    for (const key of Object.keys(listeners)) delete listeners[key];
     mockSocket.emit.mockClear();
   });
 
