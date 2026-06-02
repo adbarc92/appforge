@@ -32,6 +32,10 @@ EmitFn = Callable[[str, dict, str], Awaitable[None]]
 # end. When the real LLM cost is plumbed through, drop this constant.
 _CLARIFYING_COST_ESTIMATE = 0.05
 
+_PLANNING_COST_ESTIMATE = (
+    0.05  # per planning agent; placeholder until real cost is threaded
+)
+
 
 def _result_field(result: Any, field: str, default: Any = None) -> Any:
     """Read a field from an agent result that may be a dict or a dataclass/Pydantic model."""
@@ -120,6 +124,18 @@ class Orchestrator:
         # Arm the resume queue before any node can interrupt so user_message /
         # approve decisions are never dropped for lack of a destination.
         self._resume_queues[project_id] = asyncio.Queue()
+
+        # The injected emit may be either an async coroutine function (the
+        # production Socket.IO bridge in main.py) or a plain sync callable
+        # (used by the socket-level integration tests). Normalize so the node
+        # closures below can always `await emit(...)`.
+        _raw_emit = emit
+
+        async def emit(event: str, data: dict, room_: str) -> None:
+            result = _raw_emit(event, data, room_)
+            if asyncio.iscoroutine(result):
+                await result
+
         await emit("agent_status", {"agent": "orchestrator", "status": "running"}, room)
 
         clarifying_agent = self.registry.get_agent("clarifying_pm")
@@ -282,6 +298,25 @@ class Orchestrator:
             comment = (decision.get("comment") or "").strip()
             if not approved and comment:
                 update["rejection_comments"] = state.rejection_comments + [comment]
+            if approved and self.config.enable_phase4:
+                await emit(
+                    "phase_complete",
+                    {"phase": 3, "summary": "PRD approved", "status": "success"},
+                    room,
+                )
+                can, reason = self.budget_guard.can_spend(3 * _PLANNING_COST_ESTIMATE)
+                if not can:
+                    await emit(
+                        "agent_status",
+                        {
+                            "agent": "orchestrator",
+                            "status": "error",
+                            "details": "budget_exceeded",
+                            "reason": reason,
+                        },
+                        room,
+                    )
+                    raise RuntimeError("Budget hard stop before planning fan-out")
             return update
 
         async def summarizer_node(state: ProjectState) -> dict[str, Any]:
@@ -290,9 +325,13 @@ class Orchestrator:
                 {"agent": "delivery_summarizer", "status": "running"},
                 room,
             )
+            phase = 4 if self.config.enable_phase4 else 3
+            summary = (
+                "Planning approved" if self.config.enable_phase4 else "PRD approved"
+            )
             await emit(
                 "phase_complete",
-                {"phase": 3, "summary": "PRD approved", "status": "success"},
+                {"phase": phase, "summary": summary, "status": "success"},
                 room,
             )
             await emit(
@@ -300,7 +339,108 @@ class Orchestrator:
                 {"agent": "delivery_summarizer", "status": "complete"},
                 room,
             )
-            return {"current_phase": 4}
+            return {"current_phase": phase + 1}
+
+        def _make_planning_node(
+            agent_id: str, artifact_key: str, state_field: str, kind: str
+        ):
+            agent = self.registry.get_agent(agent_id)
+
+            async def _node(state: ProjectState) -> dict[str, Any]:
+                await emit(
+                    "agent_status", {"agent": agent_id, "status": "running"}, room
+                )
+                result = await agent.execute(
+                    {
+                        "idea": state.idea,
+                        "prd": state.prd or "",
+                        "rejection_comments": list(state.planning_rejection_comments),
+                        "mode": "mock" if self.mock_mode else "real",
+                    }
+                )
+                if _result_field(result, "status") != "success":
+                    await emit(
+                        "agent_status",
+                        {
+                            "agent": agent_id,
+                            "status": "error",
+                            "details": _result_field(result, "error"),
+                        },
+                        room,
+                    )
+                    raise RuntimeError(
+                        _result_field(result, "error", f"{agent_id} failed")
+                    )
+                self.budget_guard.record_spend(
+                    agent_id=agent_id,
+                    cost=float(_result_field(result, "cost", 0.0) or 0.0),
+                    phase=4,
+                )
+                artifact = _result_field(result, "artifact") or {}
+                value = artifact.get(artifact_key)
+                await emit("planning_artifact", {"kind": kind, "content": value}, room)
+                await emit(
+                    "agent_status", {"agent": agent_id, "status": "complete"}, room
+                )
+                return {state_field: value}
+
+            return _node
+
+        solution_architect_node = _make_planning_node(
+            "solution_architect", "adr", "adr", "adr"
+        )
+        tech_lead_node = _make_planning_node("tech_lead", "tasks", "tasks", "tasks")
+        uiux_designer_node = _make_planning_node(
+            "uiux_designer", "design_spec", "design_spec", "design"
+        )
+
+        def _render_plan(state: ProjectState) -> str:
+            lines = [
+                "# Implementation Plan",
+                "",
+                "## Architecture Decision Record",
+                state.adr or "",
+            ]
+            lines += ["", "## Tasks"]
+            for t in state.tasks:
+                dep = f" (depends on {', '.join(t.depends_on)})" if t.depends_on else ""
+                lines.append(
+                    f"- **{t.title}** — _{t.owner_agent}_{dep}: {t.description}"
+                )
+            lines += ["", "## Design", "```json", str(state.design_spec), "```"]
+            return "\n".join(lines)
+
+        async def planning_fan_in_node(state: ProjectState) -> dict[str, Any]:
+            await emit(
+                "approval_required",
+                {
+                    "phase": 4,
+                    "agent": "tech_lead",
+                    "kind": "plan",
+                    "content": _render_plan(state),
+                    "escalation": state.planning_approval_count >= 3,
+                },
+                room,
+            )
+            return {}
+
+        async def planning_approval_node(state: ProjectState) -> dict[str, Any]:
+            decision = interrupt({"phase": 4, "gate": "plan"})
+            decision_value = decision.get("decision") or (
+                "approved" if decision.get("answer", "").strip() else "rejected"
+            )
+            approved = decision_value == "approved"
+            update: dict[str, Any] = {
+                "planning_approval_status": decision_value,
+                "planning_approval_count": state.planning_approval_count
+                + (0 if approved else 1),
+            }
+            comment = (decision.get("comment") or "").strip()
+            if not approved and comment:
+                update["planning_rejection_comments"] = (
+                    state.planning_rejection_comments + [comment]
+                )
+            return update
 
         saver = await self._ensure_saver()
         graph = build_graph(
@@ -308,6 +448,12 @@ class Orchestrator:
             clarifying_pm_node=clarifying_node,
             approval_node=approval_node,
             summarizer_node=summarizer_node,
+            solution_architect_node=solution_architect_node,
+            tech_lead_node=tech_lead_node,
+            uiux_designer_node=uiux_designer_node,
+            planning_fan_in_node=planning_fan_in_node,
+            planning_approval_node=planning_approval_node,
+            enable_phase4=self.config.enable_phase4,
         )
 
         async def _driver() -> None:
