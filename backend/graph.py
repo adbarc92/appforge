@@ -27,6 +27,14 @@ class Answer(BaseModel):
     text: str
 
 
+class Task(BaseModel):
+    id: str
+    title: str
+    description: str
+    owner_agent: str
+    depends_on: list[str] = Field(default_factory=list)
+
+
 class ProjectState(BaseModel):
     idea: str = ""
     questions: list[Question] = Field(default_factory=list)
@@ -40,6 +48,14 @@ class ProjectState(BaseModel):
     rejection_comments: list[str] = Field(default_factory=list)
     current_phase: int = 3
     cost_so_far: float = 0.0
+    adr: str | None = None
+    tasks: list[Task] = Field(default_factory=list)
+    design_spec: dict[str, Any] | None = None
+    planning_approval_status: (
+        Literal["pending", "approved", "rejected", "modified"] | None
+    ) = None
+    planning_approval_count: int = 0
+    planning_rejection_comments: list[str] = Field(default_factory=list)
 
 
 # Node function signatures. Actual implementations are provided by the

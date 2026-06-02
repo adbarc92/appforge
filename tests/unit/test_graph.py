@@ -32,5 +32,20 @@ async def test_build_graph_compiles_with_three_nodes():
         assert required in node_names, f"missing node: {required}"
 
 
+def test_projectstate_has_planning_fields():
+    from backend.graph import ProjectState, Task
+
+    s = ProjectState()
+    assert s.adr is None
+    assert s.tasks == []
+    assert s.design_spec is None
+    assert s.planning_approval_status is None
+    assert s.planning_approval_count == 0
+    assert s.planning_rejection_comments == []
+
+    t = Task(id="t1", title="Build login", description="...", owner_agent="backend")
+    assert t.depends_on == []
+
+
 # Markers for test categorization
 pytestmark = [pytest.mark.unit]
