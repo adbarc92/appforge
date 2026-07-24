@@ -43,7 +43,7 @@ def test_config_reads_env(monkeypatch):
 
 def test_config_loads_yaml_files():
     cfg = Config.load()
-    # agents.yaml has top-level `agents:` dict containing the 15 agents
+    # agents.yaml has top-level `agents:` dict containing the 16 agents
     assert "agents" in cfg.agents_yaml
     assert "clarifying_pm" in cfg.agents_yaml["agents"]
     # budget.yaml has top-level `budget:` dict with thresholds under warning_levels

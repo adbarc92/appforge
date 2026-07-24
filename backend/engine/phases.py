@@ -53,11 +53,17 @@ class PhasesConfig:
 
     def _validate(self) -> None:
         orders = [p.order for p in self._phases]
-        assert orders == list(range(len(self._phases))), f"phase orders must be 0..N: {orders}"
+        if orders != list(range(len(self._phases))):
+            raise ValueError(f"phase orders must be 0..N-1, got {orders}")
         for p in self._phases:
             for aid, spec in p.agents.items():
                 for dep in spec.depends_on:
-                    assert dep in p.agents, f"{p.name}.{aid} depends on unknown intra-phase agent {dep!r}"
+                    if dep == aid:
+                        raise ValueError(f"{p.name}.{aid} depends on itself")
+                    if dep not in p.agents:
+                        raise ValueError(
+                            f"{p.name}.{aid} depends on unknown intra-phase agent {dep!r}"
+                        )
 
     @property
     def phase_names(self) -> list[str]:
@@ -77,5 +83,4 @@ class PhasesConfig:
 
 
 def load_downgrade_paths(path: str = "config/budget.yaml") -> dict[str, str]:
-    import yaml
     return yaml.safe_load(Path(path).read_text(encoding="utf-8")).get("downgrade_paths", {})
