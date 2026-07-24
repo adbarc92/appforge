@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 import aiosqlite
@@ -37,23 +38,33 @@ class Store:
             await self._db.close()
             self._db = None
 
+    @asynccontextmanager
+    async def _txn(self):
+        """Commit on success, rollback on any exception. Caller must already hold _db_lock."""
+        try:
+            yield
+            await self._db.commit()
+        except Exception:
+            await self._db.rollback()
+            raise
+
     async def create_run(self, run_id: str, idea: str, budget_limit: float) -> None:
         async with self._db_lock:
-            now = self._now()
-            await self._db.execute(
-                "INSERT INTO runs (run_id, idea, budget_limit, created_at) VALUES (?,?,?,?)",
-                (run_id, idea, budget_limit, now),
-            )
-            for name in self.cfg.phase_names:
-                order = self.cfg.order_of(name)
-                status = "open" if name == "clarify" else "blocked"
+            async with self._txn():
+                now = self._now()
                 await self._db.execute(
-                    "INSERT INTO phases (run_id, name, phase_order, status, gate, seeded) VALUES (?,?,?,?,?,0)",
-                    (run_id, name, order, status, self.cfg.gate_of(name)),
+                    "INSERT INTO runs (run_id, idea, budget_limit, created_at) VALUES (?,?,?,?)",
+                    (run_id, idea, budget_limit, now),
                 )
-            await self._seed_phase_locked(run_id, "clarify", now)
-            await self._recompute_ready_locked(run_id)
-            await self._db.commit()
+                for name in self.cfg.phase_names:
+                    order = self.cfg.order_of(name)
+                    status = "open" if name == "clarify" else "blocked"
+                    await self._db.execute(
+                        "INSERT INTO phases (run_id, name, phase_order, status, gate, seeded) VALUES (?,?,?,?,?,0)",
+                        (run_id, name, order, status, self.cfg.gate_of(name)),
+                    )
+                await self._seed_phase_locked(run_id, "clarify", now)
+                await self._recompute_ready_locked(run_id)
 
     async def _seed_phase_locked(self, run_id: str, phase_name: str, now: float) -> None:
         specs = sch.seed_specs_for_phase(self.cfg, run_id, phase_name, self.base_models)
@@ -104,16 +115,17 @@ class Store:
 
     async def put_state(self, run_id: str, key: str, value: Any, expected_version: int) -> bool:
         async with self._db_lock:
-            if expected_version == 0:
-                cur = await self._db.execute(
-                    "INSERT OR IGNORE INTO state (run_id, key, value, version) VALUES (?,?,?,1)",
-                    (run_id, key, json.dumps(value)),
-                )
-                await self._db.commit()
-                return cur.rowcount == 1
-            cur = await self._db.execute(
-                "UPDATE state SET value=?, version=version+1 WHERE run_id=? AND key=? AND version=?",
-                (json.dumps(value), run_id, key, expected_version),
-            )
-            await self._db.commit()
-            return cur.rowcount == 1
+            async with self._txn():
+                if expected_version == 0:
+                    cur = await self._db.execute(
+                        "INSERT OR IGNORE INTO state (run_id, key, value, version) VALUES (?,?,?,1)",
+                        (run_id, key, json.dumps(value)),
+                    )
+                    result = cur.rowcount == 1
+                else:
+                    cur = await self._db.execute(
+                        "UPDATE state SET value=?, version=version+1 WHERE run_id=? AND key=? AND version=?",
+                        (json.dumps(value), run_id, key, expected_version),
+                    )
+                    result = cur.rowcount == 1
+            return result
