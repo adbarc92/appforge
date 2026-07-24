@@ -73,3 +73,22 @@ def test_resolve_model_downgrades_over_threshold():
     assert sch.resolve_model("qa_test", "gpt-4o", 0.50, dp, skip) == "gpt-4o"      # under threshold
     assert sch.resolve_model("solution_architect", "claude-3-5-sonnet-20241022", 0.99, dp, skip) == "claude-3-5-sonnet-20241022"  # protected
     assert sch.resolve_model("technical_writer", "gpt-4o-mini", 0.99, dp, skip) == "gpt-4o-mini"  # no successor
+
+
+def test_advance_guard_seeded_but_empty_never_completes():
+    phases = [{"name": "test", "phase_order": 3, "status": "open", "gate": "none", "seeded": 1}]
+    assert sch.advance(phases, [], CFG)["complete_phases"] == []
+
+
+def test_advance_guard_unseeded_with_done_task_never_completes():
+    phases = [{"name": "test", "phase_order": 3, "status": "open", "gate": "none", "seeded": 0}]
+    tasks = [{"task_id": "x", "phase": "test", "status": "done", "depends_on": []}]
+    assert sch.advance(phases, tasks, CFG)["complete_phases"] == []
+
+
+def test_resolve_model_edge_cases():
+    dp = {"gpt-4o": "gpt-4o-mini"}
+    skip = {"clarifying_pm", "solution_architect"}
+    assert sch.resolve_model("backend", None, 0.99, dp, skip) is None            # None passthrough
+    assert sch.resolve_model("qa_test", "gpt-4o", 0.85, dp, skip) == "gpt-4o-mini"  # exact threshold downgrades
+    assert sch.resolve_model("clarifying_pm", "gpt-4o", 0.99, dp, skip) == "gpt-4o"  # critical protected
