@@ -15,7 +15,10 @@ def test_tasks_has_ordering_and_lease_columns(tmp_path):
     db = sqlite3.connect(tmp_path / "t.db")
     db.executescript(SCHEMA_SQL)
     cols = {r[1] for r in db.execute("PRAGMA table_info(tasks)")}
-    assert {"phase_order", "created_at", "claimed_at", "lease_expires", "version", "sim_cost"} <= cols
+    required_cols = {"task_id", "run_id", "phase", "phase_order", "agent_id", "input",
+                     "depends_on", "status", "owner", "version", "attempts", "lease_expires",
+                     "created_at", "claimed_at", "model", "sim_cost", "result"}
+    assert required_cols <= cols
     db.close()
 
 
