@@ -57,3 +57,15 @@ async def test_fail_task_requeues_until_cap(store):
     await store.fail_task(c.task_id, "w1", c.version, "boom")
     t = next(t for t in await store._all_tasks("r1") if t["task_id"] == c.task_id)
     assert t["status"] == "ready" and t["attempts"] == 1
+    assert t["owner"] is None
+
+
+async def test_fail_task_reaches_cap_and_fails_run(store):
+    for _ in range(3):
+        c = await store.claim_next_task("r1", "w1")
+        assert c is not None
+        await store.fail_task(c.task_id, "w1", c.version, "boom")
+    t = next(t for t in await store._all_tasks("r1") if t["agent_id"] == "clarifying_pm")
+    assert t["status"] == "failed" and t["attempts"] == 3
+    cur = await store._db.execute("SELECT status FROM runs WHERE run_id='r1'")
+    assert (await cur.fetchone())["status"] == "failed"

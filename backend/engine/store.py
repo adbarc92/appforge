@@ -210,6 +210,7 @@ class Store:
     async def _advance_locked(self, run_id: str) -> None:
         now = self._now()
         plan = sch.advance(await self._all_phases(run_id), await self._all_tasks(run_id), self.cfg)
+        # gate-pending is derived below via cfg.gate_of; plan["open_gates"] is intentionally unused here.
         for name in plan["complete_phases"]:
             await self._db.execute("UPDATE phases SET status='complete' WHERE run_id=? AND name=?", (run_id, name))
             if self.cfg.gate_of(name) != "none":
@@ -247,7 +248,7 @@ class Store:
         async with self._db_lock:
             async with self._txn():
                 trow = await (await self._db.execute(
-                    "SELECT run_id, attempts FROM tasks WHERE task_id=? AND owner=? AND version=?",
+                    "SELECT run_id, attempts FROM tasks WHERE task_id=? AND owner=? AND version=? AND status IN ('claimed','running')",
                     (task_id, worker_id, version))).fetchone()
                 if trow is not None:
                     attempts = trow["attempts"] + 1
@@ -270,5 +271,5 @@ class Store:
                         await self._seed_phase_locked(run_id, nxt, now)
                 elif decision == "rejected":
                     await self._db.execute("UPDATE phases SET gate='rejected', status='open' WHERE run_id=? AND name=?", (run_id, phase))
-                    await self._db.execute("UPDATE tasks SET status='ready', owner=NULL WHERE run_id=? AND phase=?", (run_id, phase))
+                    await self._db.execute("UPDATE tasks SET status='blocked', owner=NULL WHERE run_id=? AND phase=?", (run_id, phase))
                 await self._recompute_ready_locked(run_id)
