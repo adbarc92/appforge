@@ -74,3 +74,8 @@ class PhasesConfig:
 
     def all_agent_ids(self) -> list[str]:
         return [aid for p in self._phases for aid in p.agents]
+
+
+def load_downgrade_paths(path: str = "config/budget.yaml") -> dict[str, str]:
+    import yaml
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8")).get("downgrade_paths", {})

@@ -1,5 +1,5 @@
 # DevTeam.AI Agent Configuration
-# All 15 agents with placeholder LLM configuration
+# All 16 agents with placeholder LLM configuration
 # Version: 1.0
 
 agents:
@@ -202,22 +202,6 @@ agents:
       model: "gpt-4o-mini"
       temperature: 0.6
       max_tokens: 4096
-
-# Budget thresholds (managed by BudgetGuard)
-budget:
-  default_limit: 200.0  # USD
-  thresholds:
-    log_only: 0.50      # 50%
-    notify_user: 0.75   # 75%
-    auto_downgrade: 0.85  # 85%
-    require_ack: 0.95   # 95%
-    hard_stop: 1.00     # 100%
-
-# Model downgrade paths for cost optimization
-downgrade_paths:
-  claude-3-5-sonnet-20241022: "claude-3-5-haiku-20241022"
-  gpt-4o: "gpt-4o-mini"
-  claude-3-5-haiku-20241022: "gpt-4o-mini"
 
 # Eco mode alternatives (open-source)
 eco_mode:

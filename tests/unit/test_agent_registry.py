@@ -257,16 +257,6 @@ class TestHotReload:
         registry.stop_reload_watcher()
 
 
-class TestBudgetConfig:
-    """Tests for budget-related config retrieval."""
-
-    def test_get_budget_config(self, registry):
-        """Should retrieve budget configuration."""
-        budget = registry.get_budget_config()
-        assert budget["default_limit"] == 100.0
-        assert "thresholds" in budget
-
-
 class TestGlobalRegistry:
     """Tests for the global registry singleton."""
 

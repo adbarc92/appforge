@@ -451,18 +451,6 @@ class AgentRegistry:
         with self._lock:
             self._instances.clear()
 
-    def get_budget_config(self) -> dict[str, Any]:
-        """Get budget configuration from the YAML file."""
-        with open(self.config_path) as f:
-            raw_config = yaml.safe_load(f)
-        return raw_config.get("budget", {})
-
-    def get_downgrade_paths(self) -> dict[str, str]:
-        """Get model downgrade paths from the YAML file."""
-        with open(self.config_path) as f:
-            raw_config = yaml.safe_load(f)
-        return raw_config.get("downgrade_paths", {})
-
 
 # Global registry instance (singleton pattern)
 _registry: AgentRegistry | None = None

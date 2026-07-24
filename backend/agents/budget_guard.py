@@ -113,6 +113,7 @@ class BudgetGuard(InstrumentedAgent):
 
         self.config_path = Path(config_path)
         self.budget_config: dict[str, Any] = {}
+        self.downgrade_paths: dict[str, str] = {}
         self.state = BudgetState()
         self._load_config()
 
@@ -133,6 +134,8 @@ class BudgetGuard(InstrumentedAgent):
         if self.config_path.exists():
             with open(self.config_path) as f:
                 self.budget_config = yaml.safe_load(f)
+
+            self.downgrade_paths = self.budget_config.get("downgrade_paths", {})
 
             budget = self.budget_config.get("budget", {})
             self.state.hard_limit = budget.get("hard_limit", 200.0)
@@ -268,6 +271,10 @@ class BudgetGuard(InstrumentedAgent):
             )
 
         return True, None
+
+    def downgrade_model_for(self, current_model: str) -> str | None:
+        """Return the cheaper model for `current_model`, or None if there is no successor."""
+        return self.downgrade_paths.get(current_model)
 
     def get_downgrade_targets(self) -> list[tuple[str, str]]:
         """
