@@ -10,7 +10,7 @@ from typing import Any
 import aiosqlite
 
 from backend.engine import scheduler as sch
-from backend.engine.models import SCHEMA_SQL
+from backend.engine.models import SCHEMA_SQL, ClaimResult
 from backend.engine.phases import PhasesConfig
 
 
@@ -129,3 +129,74 @@ class Store:
                     )
                     result = cur.rowcount == 1
             return result
+
+    async def _spend_ratio_locked(self, run_id: str) -> float:
+        cur = await self._db.execute("SELECT budget_limit FROM runs WHERE run_id=?", (run_id,))
+        row = await cur.fetchone()
+        limit = row["budget_limit"] if row else 0.0
+        cur = await self._db.execute("SELECT COALESCE(SUM(cost),0) AS s FROM spend WHERE run_id=?", (run_id,))
+        spent = (await cur.fetchone())["s"]
+        return (spent / limit) if limit > 0 else 1.0
+
+    async def _downgrade_config(self) -> tuple[dict[str, str], set[str]]:
+        # Overridden/injected in Plan C to read budget.yaml; Plan A uses no downgrades.
+        return ({}, {"clarifying_pm", "solution_architect"})
+
+    async def claim_next_task(self, run_id: str, worker_id: str) -> ClaimResult | None:
+        async with self._db_lock:
+            async with self._txn():
+                now = self._now()
+                cur = await self._db.execute(
+                    """UPDATE tasks
+                       SET status='claimed', owner=?, version=version+1, claimed_at=?, lease_expires=?
+                       WHERE task_id = (
+                           SELECT task_id FROM tasks
+                           WHERE run_id=? AND status='ready'
+                           ORDER BY phase_order, created_at LIMIT 1)
+                         AND status='ready'
+                       RETURNING task_id, run_id, phase, phase_order, agent_id, input, model, version""",
+                    (worker_id, now, now + self.lease_s, run_id),
+                )
+                row = await cur.fetchone()
+                if row is None:
+                    result = None
+                else:
+                    ratio = await self._spend_ratio_locked(run_id)
+                    paths, skip = await self._downgrade_config()
+                    model = sch.resolve_model(row["agent_id"], row["model"], ratio, paths, skip)
+                    if model != row["model"]:
+                        await self._db.execute(
+                            "UPDATE tasks SET model=? WHERE task_id=?", (model, row["task_id"])
+                        )
+                    input_keys = json.loads(row["input"]).get("input_keys", [])
+                    state = await self.get_state(run_id, input_keys) if input_keys else {}
+                    resolved_input = {k: v[0] for k, v in state.items()}
+                    result = ClaimResult(
+                        task_id=row["task_id"], run_id=row["run_id"], phase=row["phase"],
+                        phase_order=row["phase_order"], agent_id=row["agent_id"],
+                        input=resolved_input, model=model, version=row["version"],
+                    )
+            return result
+
+    async def heartbeat(self, task_id: str, worker_id: str) -> bool:
+        async with self._db_lock:
+            async with self._txn():
+                cur = await self._db.execute(
+                    """UPDATE tasks SET lease_expires=?
+                       WHERE task_id=? AND owner=? AND status IN ('claimed','running')""",
+                    (self._now() + self.lease_s, task_id, worker_id),
+                )
+                rowcount = cur.rowcount
+            return rowcount == 1
+
+    async def reap_expired(self) -> int:
+        async with self._db_lock:
+            async with self._txn():
+                cur = await self._db.execute(
+                    """UPDATE tasks
+                       SET status='ready', owner=NULL, version=version+1, attempts=attempts+1, lease_expires=NULL
+                       WHERE status IN ('claimed','running') AND lease_expires IS NOT NULL AND lease_expires < ?""",
+                    (self._now(),),
+                )
+                rowcount = cur.rowcount
+            return rowcount
