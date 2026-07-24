@@ -15,6 +15,8 @@ from backend.engine.phases import PhasesConfig
 
 
 class Store:
+    MAX_ATTEMPTS = 3
+
     def __init__(self, db_path: str, cfg: PhasesConfig, base_models: dict[str, str], lease_s: float = 120.0):
         self.db_path = db_path
         self.cfg = cfg
@@ -200,3 +202,73 @@ class Store:
                 )
                 rowcount = cur.rowcount
             return rowcount
+
+    async def spend_total(self, run_id: str) -> float:
+        cur = await self._db.execute("SELECT COALESCE(SUM(cost),0) AS s FROM spend WHERE run_id=?", (run_id,))
+        return (await cur.fetchone())["s"]
+
+    async def _advance_locked(self, run_id: str) -> None:
+        now = self._now()
+        plan = sch.advance(await self._all_phases(run_id), await self._all_tasks(run_id), self.cfg)
+        for name in plan["complete_phases"]:
+            await self._db.execute("UPDATE phases SET status='complete' WHERE run_id=? AND name=?", (run_id, name))
+            if self.cfg.gate_of(name) != "none":
+                await self._db.execute("UPDATE phases SET gate='pending' WHERE run_id=? AND name=?", (run_id, name))
+        for name in plan["open_phases"]:
+            await self._db.execute("UPDATE phases SET status='open' WHERE run_id=? AND name=?", (run_id, name))
+            await self._seed_phase_locked(run_id, name, now)
+        await self._recompute_ready_locked(run_id)
+
+    async def complete_task(self, task_id, worker_id, version, result, state_writes=None, spawn_tasks=None) -> bool:
+        async with self._db_lock:
+            async with self._txn():
+                cur = await self._db.execute(
+                    "UPDATE tasks SET status='done', result=? WHERE task_id=? AND owner=? AND version=? AND status IN ('claimed','running')",
+                    (json.dumps(result), task_id, worker_id, version))
+                if cur.rowcount != 1:
+                    ok = False
+                else:
+                    trow = await (await self._db.execute(
+                        "SELECT run_id, agent_id, model, sim_cost FROM tasks WHERE task_id=?", (task_id,))).fetchone()
+                    run_id = trow["run_id"]
+                    for k, v in (state_writes or {}).items():
+                        await self._db.execute(
+                            "INSERT INTO state (run_id, key, value, version) VALUES (?,?,?,1) "
+                            "ON CONFLICT(run_id, key) DO UPDATE SET value=excluded.value, version=state.version+1",
+                            (run_id, k, json.dumps(v)))
+                    await self._db.execute(
+                        "INSERT INTO spend (run_id, task_id, agent_id, cost, model, ts) VALUES (?,?,?,?,?,?)",
+                        (run_id, task_id, trow["agent_id"], trow["sim_cost"], trow["model"], self._now()))
+                    await self._advance_locked(run_id)
+                    ok = True
+            return ok
+
+    async def fail_task(self, task_id, worker_id, version, error) -> None:
+        async with self._db_lock:
+            async with self._txn():
+                trow = await (await self._db.execute(
+                    "SELECT run_id, attempts FROM tasks WHERE task_id=? AND owner=? AND version=?",
+                    (task_id, worker_id, version))).fetchone()
+                if trow is not None:
+                    attempts = trow["attempts"] + 1
+                    if attempts >= self.MAX_ATTEMPTS:
+                        await self._db.execute("UPDATE tasks SET status='failed', attempts=? WHERE task_id=?", (attempts, task_id))
+                        await self._db.execute("UPDATE runs SET status='failed' WHERE run_id=?", (trow["run_id"],))
+                    else:
+                        await self._db.execute("UPDATE tasks SET status='ready', owner=NULL, version=version+1, attempts=? WHERE task_id=?", (attempts, task_id))
+
+    async def submit_approval(self, run_id: str, phase: str, decision: str) -> None:
+        async with self._db_lock:
+            async with self._txn():
+                now = self._now()
+                if decision == "approved":
+                    await self._db.execute("UPDATE phases SET gate='approved' WHERE run_id=? AND name=?", (run_id, phase))
+                    order = self.cfg.order_of(phase)
+                    nxt = next((n for n in self.cfg.phase_names if self.cfg.order_of(n) == order + 1), None)
+                    if nxt is not None:
+                        await self._db.execute("UPDATE phases SET status='open' WHERE run_id=? AND name=?", (run_id, nxt))
+                        await self._seed_phase_locked(run_id, nxt, now)
+                elif decision == "rejected":
+                    await self._db.execute("UPDATE phases SET gate='rejected', status='open' WHERE run_id=? AND name=?", (run_id, phase))
+                    await self._db.execute("UPDATE tasks SET status='ready', owner=NULL WHERE run_id=? AND phase=?", (run_id, phase))
+                await self._recompute_ready_locked(run_id)
