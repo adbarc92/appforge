@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import sys
 
 from backend.engine.client import EngineClient
@@ -33,28 +34,30 @@ async def run_pipeline(idea, workers=4, budget_limit=200.0, auto_approve=True,
     url = f"http://{host}:{port}/mcp"
 
     server_task = asyncio.create_task(serve(db_path, host, port))
-    # wait for readiness by creating the run (retries until the server answers)
-    run_id = None
-    for _ in range(200):
-        try:
-            async with EngineClient(url) as c:
-                run_id = await c.create_run(idea, budget_limit)
-            break
-        except Exception:  # noqa: BLE001
-            await asyncio.sleep(0.05)
-    if run_id is None:
-        server_task.cancel()
-        raise RuntimeError("state server failed to start")
-
     procs = []
-    for i in range(workers):
-        procs.append(await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "backend.engine.worker",
-            "--server-url", url, "--run-id", run_id, "--worker-id", f"w{i}",
-        ))
-    worker_pids = [p.pid for p in procs]
-
+    worker_pids = []
+    run_id = None
+    final = None
     try:
+        # wait for the server to accept connections, then create the run
+        for _ in range(200):
+            try:
+                async with EngineClient(url) as c:
+                    run_id = await c.create_run(idea, budget_limit)
+                break
+            except Exception:  # noqa: BLE001 - server may not be up yet
+                await asyncio.sleep(0.05)
+        if run_id is None:
+            raise RuntimeError("state server failed to start")
+
+        # spawn worker subprocesses (inside the try so a mid-spawn failure still tears down)
+        for i in range(workers):
+            procs.append(await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "backend.engine.worker",
+                "--server-url", url, "--run-id", run_id, "--worker-id", f"w{i}",
+            ))
+        worker_pids = [p.pid for p in procs]
+
         final = await _drive_gates(url, run_id, auto_approve, timeout, poll)
     finally:
         for p in procs:
@@ -66,10 +69,8 @@ async def run_pipeline(idea, workers=4, budget_limit=200.0, auto_approve=True,
             except asyncio.TimeoutError:
                 p.kill()
         server_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await server_task
-        except asyncio.CancelledError:
-            pass
 
     return {"run_id": run_id, "snapshot": final, "worker_pids": worker_pids}
 
