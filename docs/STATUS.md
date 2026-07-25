@@ -7,7 +7,7 @@
 
 ## State summary
 
-**Version:** 1.0.0 · **Branch:** `publication-prep` · **Status: complete for now (feature-frozen).**
+**Version:** 1.0.0 · **Branch:** `main` · **Status: complete for now (feature-frozen).**
 
 AppForge v1.0 is the finished form of what this project set out to prove: a **parallel, MCP-coordinated multi-agent orchestration engine** in which a real MCP state server and a pool of independent OS worker processes drive a product idea through a six-phase dependency graph (Clarify → Design → Code → Test → Deploy → Iterate), with human approval gates and automatic budget-driven model downgrade.
 
@@ -20,7 +20,8 @@ The engine is done, tested, documented, and published under MIT. There is no in-
 | Backend suite | **155 passed** (`uv run pytest tests/`) |
 | Coverage | **86.96%** (gate: 70%) |
 | Frontend suite | **28 passed** across 6 files (`cd frontend && npm test`) |
-| Lint / format | `ruff check` clean · `black --check` clean (66 files) |
+| Lint / format | `ruff check` clean · `black --check` clean (67 files) |
+| CI on `main` | `backend` · `frontend` · `validate-config` green; **`e2e` red** (see gaps) |
 | Version | `pyproject.toml` 1.0.0 · `frontend/package.json` 1.0.0 · `backend/main.py` FastAPI 1.0.0 |
 | CLI | `uv run appforge run "<idea>"` (hatchling build backend, entry point installed) |
 | License | MIT (`LICENSE`) |
@@ -43,15 +44,19 @@ The engine is done, tested, documented, and published under MIT. There is no in-
 - **Single-user web bridge.** The live UI targets local single-user use. Multi-tenant lifecycle hardening (per-connection dedup, reconnect durability) is unbuilt.
 - **Historical docs.** `docs/Roadmap.md`, `docs/CoreDesignDocument.md`, and the dated `Status-*.md` files describe the LangGraph-era design and are kept as history only.
 - **Shutdown noise.** A `CancelledError` traceback prints on CLI teardown when the state-server task is cancelled. Cosmetic — the run reports `done` and exits 0 — but it looks alarming.
+- **`e2e` CI job is red — `database is locked`.** *Not* cosmetic and **not yet diagnosed.** The web bridge runs `start_run(workers=4)` against `data/web.db`; under CI those four workers hit lock contention and `claim_next_task` fails with `database is locked`. Ruling one thing out: a missing `busy_timeout` pragma is not the cause, since Python's `sqlite3.connect()` already applies a 5s busy timeout that `aiosqlite` inherits. This was masked until 2026-07-25 by the missing-`data/`-directory bug failing earlier in the same path.
+- **`e2e` specs predate the engine.** Separately, the Playwright specs were last touched 2026-06-02 and still drive the retired LangGraph chat flow (`Clarifying question #N`, `Mock PRD`). Even once the lock contention is resolved, they likely need rewriting or retiring.
 
 ### Next steps
 
 None required — the project is feature-frozen at 1.0. If it is picked up again, the highest-value candidates, in order:
 
-1. Thread real Anthropic token usage into BudgetGuard so budget figures are actual, not simulated.
-2. Harden the web bridge for multi-user / reconnect durability.
-3. Refresh or archive the LangGraph-era design docs so `docs/` matches the shipped engine.
-4. Silence the `CancelledError` teardown traceback in `stop_run`.
+1. **Diagnose the `database is locked` contention** that keeps the `e2e` job red — the only known functional defect, and the reason CI is not fully green.
+2. Decide whether the LangGraph-era Playwright specs get rewritten against the engine's flow or retired.
+3. Thread real Anthropic token usage into BudgetGuard so budget figures are actual, not simulated.
+4. Harden the web bridge for multi-user / reconnect durability.
+5. Refresh or archive the LangGraph-era design docs so `docs/` matches the shipped engine.
+6. Silence the `CancelledError` teardown traceback in `stop_run`.
 
 ---
 
@@ -65,6 +70,8 @@ None required — the project is feature-frozen at 1.0. If it is picked up again
 - It survived local verification because every store test builds its path under pytest's `tmp_path`, which already exists, and because a developer who has ever run the engine has a `data/` directory. Confirmed by A/B: with `data/` removed, the failing CI test reproduces exactly, and passes with the fix.
 - Fixed at the single point every caller passes through, plus `tests/engine/test_store_db_path.py` covering the missing parent, nested parents, and a bare filename (which must not trip the mkdir).
 - Backend suite **152 → 155**; full suite verified with `data/` absent.
+- **This unmasked a second defect.** With the open failure cleared, the `e2e` job now fails further along with `claim_next_task failed: database is locked` — logged above as a known gap and the top next step. It was always there; the missing-directory bug simply failed first.
+- Repo hygiene alongside: 8 stale Phase-2-era agent worktrees and their branches removed, 9 merged local and 4 merged remote branches deleted.
 - **State delta:** `git clone && uv run appforge run "…"` now works on a machine that has never run AppForge.
 
 ### 2026-07-25 — v1.0 follow-ups: working CLI, honest dependencies, dead config removed
