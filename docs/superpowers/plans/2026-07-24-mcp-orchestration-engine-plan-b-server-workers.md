@@ -19,7 +19,7 @@
   - Server object: `FastMCP("appforge-state", stateless_http=True)`; ASGI app via `mcp.streamable_http_app()` under uvicorn; client connects to `http://host:port/mcp`.
 - **`appforge_mcp_server.py`** entry alias at repo root (matches the resume artifact name), delegating to `backend.engine.state_server`.
 - **Mock mode:** tests + the documented run use `MOCK_AGENTS=true` (default). No real Anthropic calls.
-- **Embargo:** the string "OpenBarclay" must not appear anywhere.
+- **Embargo:** the LLC name must not appear anywhere. Frame all work as independent/personal.
 - **Commits:** conventional style, no `Co-Authored-By`/attribution footer.
 - Six phases + agents are fixed by `config/phases.yaml` (Plan A). The terminal phase is `iterate`.
 

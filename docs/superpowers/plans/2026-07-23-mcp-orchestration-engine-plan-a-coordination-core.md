@@ -16,7 +16,7 @@
 - **Single writer + `_db_lock`:** every DB-mutating `Store` method runs under `async with self._db_lock`. Collision-freedom = serialized DB ops + versioned CAS guards.
 - **Exactly-once *effect*:** completion/heartbeat are guarded by `owner==worker AND version==:v`; the reaper bumps `version` on reclaim.
 - **Config source-of-truth:** `config/phases.yaml` (new) for phases; `config/budget.yaml` for budget incl. the new `downgrade_paths`. `config/agents.yaml` provides each agent's base model.
-- **Embargo:** the string "OpenBarclay" must not appear anywhere.
+- **Embargo:** the LLC name must not appear anywhere. Frame all work as independent/personal.
 - **Commits:** no `Co-Authored-By` line, no "Generated with" attribution. Conventional-commit style.
 - **Critical agents never downgrade:** `clarifying_pm`, `solution_architect` (skip-list).
 - **Six phases / agent membership (verbatim, used across tasks):**

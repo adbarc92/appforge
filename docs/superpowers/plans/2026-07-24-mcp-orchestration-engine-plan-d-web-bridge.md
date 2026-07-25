@@ -19,7 +19,7 @@
   - `ProjectStateSnapshot`: `{project_id, idea, messages:[], agents:Record<id,{id,name,status,details?}>, approval_pending:ApprovalRequest|null, budget:{spent,limit,threshold?}, phase:int, prd:str|null, status:"running"|"paused"|"complete"|"failed", adr?, tasks?, design_spec?}`.
 - **Engine→frontend phase-number map:** `clarify→3, design→4, code→6, test→7, deploy→8, iterate→10`. Gate kinds: clarify gate → `"prd"`, design gate → `"plan"`.
 - **Agent status map:** task `blocked`/`ready` → `"pending"`; `claimed`/`running` (owner set, not done) → `"running"`; `done` → `"complete"`; `failed` → `"error"`. A task whose `model` differs from its agent's base model (`config/agents.yaml`) → emit `"downgraded"` on completion instead of `"complete"`.
-- Mock mode only (`MOCK_AGENTS=true`) for tests. No "OpenBarclay"; commits carry no attribution footer.
+- Mock mode only (`MOCK_AGENTS=true`) for tests. No LLC name; commits carry no attribution footer.
 
 ---
 
