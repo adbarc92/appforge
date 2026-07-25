@@ -56,17 +56,17 @@ async def run_worker(
                     registry,
                     cfg,
                 )
-                await client.complete_task(
+                if await client.complete_task(
                     claim["task_id"], worker_id, claim["version"], result, state_writes
-                )
-                completed += 1
+                ):
+                    completed += 1
             except Exception as e:  # noqa: BLE001
                 await client.fail_task(
                     claim["task_id"], worker_id, claim["version"], str(e)
                 )
             finally:
                 hb.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await hb
 
 

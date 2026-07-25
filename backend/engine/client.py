@@ -35,7 +35,8 @@ class EngineClient:
     async def _call(self, name: str, **args: Any) -> Any:
         res = await self._session.call_tool(name, args)
         if res.isError:
-            raise RuntimeError(f"{name} failed: {res.content[0].text}")
+            msg = res.content[0].text if res.content else str(res)
+            raise RuntimeError(f"{name} failed: {msg}")
         return json.loads(res.content[0].text)
 
     async def create_run(self, idea: str, budget_limit: float = 200.0) -> str:

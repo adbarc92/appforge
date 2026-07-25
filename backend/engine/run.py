@@ -12,7 +12,7 @@ from backend.engine.state_server import free_port, serve
 
 
 async def _drive_gates(url, run_id, auto_approve, timeout, poll):
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     async with EngineClient(url) as c:
         while True:

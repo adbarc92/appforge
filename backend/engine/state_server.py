@@ -68,6 +68,7 @@ async def serve(
         await server.serve()
     finally:
         reaper.cancel()
+        await asyncio.gather(reaper, return_exceptions=True)
         await store.close()
 
 
