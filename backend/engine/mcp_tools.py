@@ -24,3 +24,24 @@ def register_tools(mcp, store: Store) -> None:
     async def put_state(run_id: str, key: str, value_json: str, expected_version: int) -> str:
         ok = await store.put_state(run_id, key, json.loads(value_json), expected_version)
         return json.dumps({"ok": ok})
+
+    @mcp.tool()
+    async def claim_next_task(run_id: str, worker_id: str) -> str:
+        cr = await store.claim_next_task(run_id, worker_id)
+        return json.dumps(cr.model_dump() if cr is not None else None)
+
+    @mcp.tool()
+    async def complete_task(task_id: str, worker_id: str, version: int,
+                            result_json: str, state_writes_json: str = "null") -> str:
+        ok = await store.complete_task(task_id, worker_id, version,
+                                       json.loads(result_json), json.loads(state_writes_json))
+        return json.dumps({"ok": ok})
+
+    @mcp.tool()
+    async def heartbeat(task_id: str, worker_id: str) -> str:
+        return json.dumps({"ok": await store.heartbeat(task_id, worker_id)})
+
+    @mcp.tool()
+    async def fail_task(task_id: str, worker_id: str, version: int, error: str) -> str:
+        await store.fail_task(task_id, worker_id, version, error)
+        return json.dumps({"ok": True})

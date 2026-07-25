@@ -44,3 +44,17 @@ class EngineClient:
     async def put_state(self, run_id: str, key: str, value: Any, expected_version: int) -> bool:
         return (await self._call("put_state", run_id=run_id, key=key,
                                  value_json=json.dumps(value), expected_version=expected_version))["ok"]
+
+    async def claim_next_task(self, run_id: str, worker_id: str) -> dict | None:
+        return await self._call("claim_next_task", run_id=run_id, worker_id=worker_id)
+
+    async def complete_task(self, task_id, worker_id, version, result, state_writes=None) -> bool:
+        return (await self._call("complete_task", task_id=task_id, worker_id=worker_id,
+                                 version=version, result_json=json.dumps(result),
+                                 state_writes_json=json.dumps(state_writes)))["ok"]
+
+    async def heartbeat(self, task_id: str, worker_id: str) -> bool:
+        return (await self._call("heartbeat", task_id=task_id, worker_id=worker_id))["ok"]
+
+    async def fail_task(self, task_id, worker_id, version, error: str) -> None:
+        await self._call("fail_task", task_id=task_id, worker_id=worker_id, version=version, error=error)
