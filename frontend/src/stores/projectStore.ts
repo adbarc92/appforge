@@ -23,7 +23,7 @@ const AGENT_NAMES: Record<string, string> = {
   ai_ml: "AI/ML",
   devops: "DevOps",
   security: "Security",
-  qa: "QA",
+  qa_test: "QA",
   technical_writer: "Technical Writer",
   delivery_summarizer: "Delivery Summarizer",
 };

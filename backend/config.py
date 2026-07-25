@@ -54,7 +54,6 @@ class Config:
     log_level: str
     budget_limit: float
     anthropic_model: str
-    sqlite_path: str
     max_clarifying_questions: int
     enable_phase4: bool
     engine_lease_ttl: float = 120.0
@@ -68,7 +67,6 @@ class Config:
 
     @classmethod
     def load(cls) -> Config:
-        default_sqlite = str(REPO_ROOT / "data" / "checkpoints.db")
         return cls(
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             mock_agents=_env_bool("MOCK_AGENTS", True),
@@ -76,7 +74,6 @@ class Config:
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             budget_limit=_env_float("BUDGET_LIMIT", 200.0),
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
-            sqlite_path=os.getenv("SQLITE_PATH", default_sqlite),
             max_clarifying_questions=_env_int("MAX_CLARIFYING_QUESTIONS", 6),
             enable_phase4=_env_bool("ENABLE_PHASE4", True),
             engine_lease_ttl=_env_float("ENGINE_LEASE_TTL", 120.0),
