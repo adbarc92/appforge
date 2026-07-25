@@ -1,5 +1,5 @@
 """
-DevTeam.AI - Mock Agent
+AppForge - Mock Agent
 Phase 2: Configurable Mock for Testing
 
 The MockAgent provides a configurable mock implementation

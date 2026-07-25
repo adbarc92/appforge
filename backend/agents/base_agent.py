@@ -1,5 +1,5 @@
 """
-DevTeam.AI - Base Agent Class
+AppForge - Base Agent Class
 Phase 2: Universal Agent Framework
 
 The InstrumentedAgent is the base class for all agents in the system.
@@ -140,7 +140,7 @@ class InstrumentedAgent(ABC):
     """
     Base agent with event emission for UI updates.
 
-    All agents in DevTeam.AI inherit from this class. It provides:
+    All agents in AppForge inherit from this class. It provides:
     - Structured logging bound to agent name
     - Status emission via callback (for Socket.IO/Streamlit)
     - Standardized execute() interface

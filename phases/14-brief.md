@@ -1,7 +1,7 @@
 # Phase 14 Brief - Public Template Release
 
 ## Purpose
-Package DevTeam.AI into a reusable template that others can clone, deploy, and run within five minutes, including documentation, onboarding scripts, and license terms.
+Package AppForge into a reusable template that others can clone, deploy, and run within five minutes, including documentation, onboarding scripts, and license terms.
 
 ## Prerequisites
 - Phase 13 checklist: Self-improvement loop operational.

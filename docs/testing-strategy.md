@@ -1,7 +1,7 @@
 # Testing Strategy v1.0
 
 ## Purpose
-Define a consistent validation approach for every DevTeam.AI phase, spanning unit, integration, regression, and manual thought-experiment tests. Testing artifacts live alongside code so checklist verification stays under 3 minutes.
+Define a consistent validation approach for every AppForge phase, spanning unit, integration, regression, and manual thought-experiment tests. Testing artifacts live alongside code so checklist verification stays under 3 minutes.
 
 ## Test Categories
 1. **Unit Tests**  
@@ -53,7 +53,7 @@ Define a consistent validation approach for every DevTeam.AI phase, spanning uni
 
 ## Automation Hooks
 - GitHub Actions pipeline stages: `lint`, `test-unit`, `test-integration`, `report`.
-- Phase-specific jobs toggled via matrix keyed by `DEVTEAM_PHASE`.
+- Phase-specific jobs toggled via matrix keyed by `APPFORGE_PHASE`.
 - BudgetGuard cancels long-running suites if spend threshold already exceeded (Phase 2).
 
 ## Failure Handling

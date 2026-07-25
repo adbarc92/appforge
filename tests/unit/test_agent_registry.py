@@ -1,5 +1,5 @@
 """
-DevTeam.AI - Agent Registry Tests
+AppForge - Agent Registry Tests
 Phase 2: Agent Framework + BudgetGuard
 
 Tests for the agent registry including:

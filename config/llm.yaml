@@ -1,4 +1,4 @@
-# DevTeam.AI - LLM Configuration
+# AppForge - LLM Configuration
 # Phase 1: Skeleton configuration for LLM providers
 # Actual API calls will be enabled in Phase 3
 
@@ -136,7 +136,7 @@ tracing:
   langsmith:
     enabled: false
     api_key_env: LANGSMITH_API_KEY
-    project: devteam-ai
+    project: appforge
   opentelemetry:
     enabled: false
     endpoint: http://localhost:4317

@@ -1,5 +1,5 @@
 """
-DevTeam.AI - Test Suite
+AppForge - Test Suite
 
 Tests are organized by type:
 - unit/: Individual component tests

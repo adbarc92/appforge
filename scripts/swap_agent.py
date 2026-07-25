@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DevTeam.AI - Agent Swap CLI
+AppForge - Agent Swap CLI
 Phase 2: Hot-swappable Agent Framework
 
 Swap any agent implementation with <10 lines of configuration change.
@@ -169,7 +169,7 @@ def reset_agent(config_path: Path, agent_id: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Swap agent implementations in DevTeam.AI",
+        description="Swap agent implementations in AppForge",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
