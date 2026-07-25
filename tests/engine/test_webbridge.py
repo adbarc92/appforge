@@ -124,3 +124,17 @@ def test_to_project_state_shape():
     assert ps["agents"]["clarifying_pm"]["status"] == "complete"
     assert ps["approval_pending"]["kind"] == "prd"
     assert ps["budget"]["spent"] == 1.0
+
+
+def test_budget_update_uses_discrete_threshold_bucket():
+    prev = _snap("running", [], [], spent=0.0, limit=200.0)
+    new = _snap("running", [], [], spent=190.0, limit=200.0)  # 0.95
+    events = wb.diff_to_events(prev, new, {}, {})
+    bu = [p for e, p in events if e == "budget_update"]
+    assert bu and bu[0]["threshold"] == 95 and bu[0]["spent"] == 190.0
+
+
+def test_to_project_state_includes_threshold_bucket():
+    snap = _snap("running", [], [], spent=170.0, limit=200.0)  # 0.85
+    ps = wb.to_project_state(snap, "todo", {})
+    assert ps["budget"]["threshold"] == 85

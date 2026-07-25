@@ -18,6 +18,16 @@ def phase_number(name: str) -> int:
     return _PHASE_NUMBER.get(name, 0)
 
 
+def _threshold_bucket(spent: float, limit: float) -> int:
+    if limit <= 0:
+        return 0
+    ratio = spent / limit
+    for bucket in (100, 95, 85, 75, 50):
+        if ratio >= bucket / 100:
+            return bucket
+    return 0
+
+
 def _agent_status(task: dict, base_models: dict) -> str:
     status = task["status"]
     if status == "failed":
@@ -56,19 +66,26 @@ def to_project_state(snapshot: dict, idea: str, state: dict) -> dict:
                 "content": content if isinstance(content, str) else str(content),
                 "kind": kind,
             }
+            break
     open_phase = next((p for p in snapshot["phases"] if p["status"] == "open"), None)
     fe_status = {"done": "complete", "failed": "failed"}.get(
         snapshot["status"], "running"
     )
     if pending is not None:
         fe_status = "paused"
+    b = snapshot.get("budget", {"spent": 0.0, "limit": 0.0})
+    budget = {
+        "spent": b.get("spent", 0.0),
+        "limit": b.get("limit", 0.0),
+        "threshold": _threshold_bucket(b.get("spent", 0.0), b.get("limit", 0.0)),
+    }
     return {
         "project_id": snapshot["run_id"],
         "idea": idea,
         "messages": [],
         "agents": agents,
         "approval_pending": pending,
-        "budget": snapshot.get("budget", {"spent": 0.0, "limit": 0.0}),
+        "budget": budget,
         "phase": phase_number(open_phase["name"]) if open_phase else 3,
         "prd": state.get("prd"),
         "status": fe_status,
@@ -120,14 +137,15 @@ def diff_to_events(
     nb = new.get("budget", {})
     ob = prev.get("budget", {}) if prev else {}
     if nb and nb.get("spent") != ob.get("spent"):
-        limit = nb.get("limit", 0.0) or 1.0
         events.append(
             (
                 "budget_update",
                 {
                     "spent": nb.get("spent", 0.0),
                     "limit": nb.get("limit", 0.0),
-                    "threshold": round(nb.get("spent", 0.0) / limit, 4),
+                    "threshold": _threshold_bucket(
+                        nb.get("spent", 0.0), nb.get("limit", 0.0)
+                    ),
                 },
             )
         )
