@@ -24,11 +24,13 @@ class Store:
         cfg: PhasesConfig,
         base_models: dict[str, str],
         lease_s: float = 120.0,
+        downgrade_paths: dict[str, str] | None = None,
     ):
         self.db_path = db_path
         self.cfg = cfg
         self.base_models = base_models
         self.lease_s = lease_s
+        self.downgrade_paths = downgrade_paths or {}
         self._db: aiosqlite.Connection | None = None
         self._db_lock = asyncio.Lock()
 
@@ -58,6 +60,7 @@ class Store:
             raise
 
     async def create_run(self, run_id: str, idea: str, budget_limit: float) -> None:
+        entry = self.cfg.phase_names[0]  # order-0 phase (phase_names is order-sorted)
         async with self._db_lock, self._txn():
             now = self._now()
             await self._db.execute(
@@ -66,12 +69,12 @@ class Store:
             )
             for name in self.cfg.phase_names:
                 order = self.cfg.order_of(name)
-                status = "open" if name == "clarify" else "blocked"
+                status = "open" if name == entry else "blocked"
                 await self._db.execute(
                     "INSERT INTO phases (run_id, name, phase_order, status, gate, seeded) VALUES (?,?,?,?,?,0)",
                     (run_id, name, order, status, self.cfg.gate_of(name)),
                 )
-            await self._seed_phase_locked(run_id, "clarify", now)
+            await self._seed_phase_locked(run_id, entry, now)
             await self._recompute_ready_locked(run_id)
 
     async def _seed_phase_locked(
@@ -173,8 +176,7 @@ class Store:
         return (spent / limit) if limit > 0 else 1.0
 
     async def _downgrade_config(self) -> tuple[dict[str, str], set[str]]:
-        # Overridden/injected in Plan C to read budget.yaml; Plan A uses no downgrades.
-        return ({}, {"clarifying_pm", "solution_architect"})
+        return (self.downgrade_paths, {"clarifying_pm", "solution_architect"})
 
     async def claim_next_task(self, run_id: str, worker_id: str) -> ClaimResult | None:
         async with self._db_lock:
@@ -410,6 +412,7 @@ class Store:
                     "phase": t["phase"],
                     "status": t["status"],
                     "owner": t["owner"],
+                    "model": t["model"],
                 }
                 for t in tasks
             ],

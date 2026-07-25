@@ -1,0 +1,129 @@
+{
+  "run_id": "4a9b6b809e4b4cad8b03a04e687c3b25",
+  "status": "done",
+  "phases": [
+    {
+      "name": "clarify",
+      "status": "complete",
+      "gate": "approved"
+    },
+    {
+      "name": "code",
+      "status": "complete",
+      "gate": "none"
+    },
+    {
+      "name": "deploy",
+      "status": "complete",
+      "gate": "none"
+    },
+    {
+      "name": "design",
+      "status": "complete",
+      "gate": "approved"
+    },
+    {
+      "name": "iterate",
+      "status": "complete",
+      "gate": "none"
+    },
+    {
+      "name": "test",
+      "status": "complete",
+      "gate": "none"
+    }
+  ],
+  "tasks": [
+    {
+      "agent_id": "clarifying_pm",
+      "phase": "clarify",
+      "status": "done",
+      "owner": "w0",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    {
+      "agent_id": "solution_architect",
+      "phase": "design",
+      "status": "done",
+      "owner": "w0",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    {
+      "agent_id": "tech_lead",
+      "phase": "design",
+      "status": "done",
+      "owner": "w0",
+      "model": "gpt-4o"
+    },
+    {
+      "agent_id": "uiux_designer",
+      "phase": "design",
+      "status": "done",
+      "owner": "w0",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    {
+      "agent_id": "database",
+      "phase": "code",
+      "status": "done",
+      "owner": "w0",
+      "model": "gpt-4o"
+    },
+    {
+      "agent_id": "backend",
+      "phase": "code",
+      "status": "done",
+      "owner": "w0",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    {
+      "agent_id": "frontend",
+      "phase": "code",
+      "status": "done",
+      "owner": "w0",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    {
+      "agent_id": "ai_ml",
+      "phase": "code",
+      "status": "done",
+      "owner": "w2",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    {
+      "agent_id": "qa_test",
+      "phase": "test",
+      "status": "done",
+      "owner": "w0",
+      "model": "gpt-4o-mini"
+    },
+    {
+      "agent_id": "security",
+      "phase": "test",
+      "status": "done",
+      "owner": "w0",
+      "model": "claude-3-5-haiku-20241022"
+    },
+    {
+      "agent_id": "devops",
+      "phase": "deploy",
+      "status": "done",
+      "owner": "w0",
+      "model": "gpt-4o-mini"
+    },
+    {
+      "agent_id": "technical_writer",
+      "phase": "deploy",
+      "status": "done",
+      "owner": "w0",
+      "model": "gpt-4o-mini"
+    },
+    {
+      "agent_id": "delivery_summarizer",
+      "phase": "iterate",
+      "status": "done",
+      "owner": "w0",
+      "model": "gpt-4o-mini"
+    }
+  ]
+}

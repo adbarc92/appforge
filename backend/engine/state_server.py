@@ -11,7 +11,7 @@ import yaml
 from mcp.server.fastmcp import FastMCP
 
 from backend.engine.mcp_tools import register_tools
-from backend.engine.phases import PhasesConfig
+from backend.engine.phases import PhasesConfig, load_downgrade_paths
 from backend.engine.store import Store
 
 
@@ -33,7 +33,13 @@ def base_models_from_config(path: str = "config/agents.yaml") -> dict[str, str]:
 def build_server(db_path, cfg=None, base_models=None, lease_s: float = 120.0):
     cfg = cfg or PhasesConfig.load()
     base_models = base_models if base_models is not None else base_models_from_config()
-    store = Store(db_path, cfg, base_models, lease_s=lease_s)
+    store = Store(
+        db_path,
+        cfg,
+        base_models,
+        lease_s=lease_s,
+        downgrade_paths=load_downgrade_paths(),
+    )
     mcp = FastMCP("appforge-state", stateless_http=True)
     register_tools(mcp, store)
     return mcp, store
