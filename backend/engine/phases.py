@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,7 +32,8 @@ class PhasesConfig:
         self._by_name = {p.name: p for p in self._phases}
 
     @classmethod
-    def load(cls, path: str = "config/phases.yaml") -> PhasesConfig:
+    def load(cls, path: str | None = None) -> PhasesConfig:
+        path = path or os.getenv("APPFORGE_PHASES", "config/phases.yaml")
         raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
         phases: list[PhaseSpec] = []
         for p in raw["phases"]:
