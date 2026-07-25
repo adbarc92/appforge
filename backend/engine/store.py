@@ -24,11 +24,13 @@ class Store:
         cfg: PhasesConfig,
         base_models: dict[str, str],
         lease_s: float = 120.0,
+        downgrade_paths: dict[str, str] | None = None,
     ):
         self.db_path = db_path
         self.cfg = cfg
         self.base_models = base_models
         self.lease_s = lease_s
+        self.downgrade_paths = downgrade_paths or {}
         self._db: aiosqlite.Connection | None = None
         self._db_lock = asyncio.Lock()
 
@@ -173,8 +175,7 @@ class Store:
         return (spent / limit) if limit > 0 else 1.0
 
     async def _downgrade_config(self) -> tuple[dict[str, str], set[str]]:
-        # Overridden/injected in Plan C to read budget.yaml; Plan A uses no downgrades.
-        return ({}, {"clarifying_pm", "solution_architect"})
+        return (self.downgrade_paths, {"clarifying_pm", "solution_architect"})
 
     async def claim_next_task(self, run_id: str, worker_id: str) -> ClaimResult | None:
         async with self._db_lock:
@@ -410,6 +411,7 @@ class Store:
                     "phase": t["phase"],
                     "status": t["status"],
                     "owner": t["owner"],
+                    "model": t["model"],
                 }
                 for t in tasks
             ],
