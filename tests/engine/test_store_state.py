@@ -4,7 +4,7 @@ from backend.engine.phases import PhasesConfig
 from backend.engine.store import Store
 
 CFG = PhasesConfig.load("config/phases.yaml")
-BASE = {aid: "gpt-4o" for aid in CFG.all_agent_ids()}
+BASE = dict.fromkeys(CFG.all_agent_ids(), "gpt-4o")
 
 
 @pytest.fixture
@@ -24,10 +24,17 @@ async def test_create_run_seeds_clarify_ready(store):
 
 async def test_put_state_cas_success_then_conflict(store):
     await store.create_run("r1", "idea", 5.0)
-    assert await store.put_state("r1", "prd", {"text": "v1"}, expected_version=0) is True
+    assert (
+        await store.put_state("r1", "prd", {"text": "v1"}, expected_version=0) is True
+    )
     got = await store.get_state("r1", ["prd"])
     assert got["prd"][0] == {"text": "v1"} and got["prd"][1] == 1
     # stale write with old version fails
-    assert await store.put_state("r1", "prd", {"text": "stale"}, expected_version=0) is False
+    assert (
+        await store.put_state("r1", "prd", {"text": "stale"}, expected_version=0)
+        is False
+    )
     # correct version succeeds
-    assert await store.put_state("r1", "prd", {"text": "v2"}, expected_version=1) is True
+    assert (
+        await store.put_state("r1", "prd", {"text": "v2"}, expected_version=1) is True
+    )

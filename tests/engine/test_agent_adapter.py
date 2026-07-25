@@ -19,15 +19,19 @@ def mock_mode():
 
 async def test_clarify_loop_yields_prd(tmp_path):
     reg = get_registry()
-    result, writes = await run_agent_task("clarifying_pm", "clarify",
-                                          {"idea": "todo app"}, "m", reg, CFG, max_questions=6)
+    result, writes = await run_agent_task(
+        "clarifying_pm", "clarify", {"idea": "todo app"}, "m", reg, CFG, max_questions=6
+    )
     assert "prd" in writes and writes["prd"]  # PRD produced without a human
+    # ensure it came from the real 3-round Q&A path (mock PRD), not the loop fallback
+    assert "Mock PRD" in writes["prd"]
     assert result["agent_id"] == "clarifying_pm"
 
 
 async def test_generic_agent_writes_its_key(tmp_path):
     reg = get_registry()
     # solution_architect writes 'adr'
-    result, writes = await run_agent_task("solution_architect", "design",
-                                          {"prd": "PRD"}, "m", reg, CFG)
+    result, writes = await run_agent_task(
+        "solution_architect", "design", {"prd": "PRD"}, "m", reg, CFG
+    )
     assert "adr" in writes and writes["adr"]

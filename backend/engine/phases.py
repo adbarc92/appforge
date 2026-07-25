@@ -1,4 +1,5 @@
 """Loader/validator for config/phases.yaml — the six-phase source of truth."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,7 +31,7 @@ class PhasesConfig:
         self._by_name = {p.name: p for p in self._phases}
 
     @classmethod
-    def load(cls, path: str = "config/phases.yaml") -> "PhasesConfig":
+    def load(cls, path: str = "config/phases.yaml") -> PhasesConfig:
         raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
         phases: list[PhaseSpec] = []
         for p in raw["phases"]:
@@ -45,7 +46,12 @@ class PhasesConfig:
                 for aid, a in p["agents"].items()
             }
             phases.append(
-                PhaseSpec(name=p["name"], order=int(p["order"]), gate=p.get("gate", "none"), agents=agents)
+                PhaseSpec(
+                    name=p["name"],
+                    order=int(p["order"]),
+                    gate=p.get("gate", "none"),
+                    agents=agents,
+                )
             )
         cfg = cls(phases)
         cfg._validate()
@@ -83,4 +89,6 @@ class PhasesConfig:
 
 
 def load_downgrade_paths(path: str = "config/budget.yaml") -> dict[str, str]:
-    return yaml.safe_load(Path(path).read_text(encoding="utf-8")).get("downgrade_paths", {})
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8")).get(
+        "downgrade_paths", {}
+    )

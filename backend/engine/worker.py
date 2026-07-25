@@ -1,8 +1,10 @@
 """Independent worker: claim -> execute (+heartbeat) -> complete/fail loop."""
+
 from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 
 from backend.agents.registry import get_registry
 from backend.engine.agent_adapter import run_agent_task
@@ -17,8 +19,16 @@ async def _heartbeat_loop(client, task_id, worker_id, interval):
             return  # lost the lease
 
 
-async def run_worker(url, run_id, worker_id, cfg=None, registry=None,
-                     poll_interval=0.05, max_poll=2.0, heartbeat_interval=20.0) -> int:
+async def run_worker(
+    url,
+    run_id,
+    worker_id,
+    cfg=None,
+    registry=None,
+    poll_interval=0.05,
+    max_poll=2.0,
+    heartbeat_interval=20.0,
+) -> int:
     cfg = cfg or PhasesConfig.load()
     registry = registry or get_registry()
     completed = 0
@@ -39,16 +49,25 @@ async def run_worker(url, run_id, worker_id, cfg=None, registry=None,
             )
             try:
                 result, state_writes = await run_agent_task(
-                    claim["agent_id"], claim["phase"], claim["input"], claim["model"], registry, cfg
+                    claim["agent_id"],
+                    claim["phase"],
+                    claim["input"],
+                    claim["model"],
+                    registry,
+                    cfg,
                 )
                 await client.complete_task(
                     claim["task_id"], worker_id, claim["version"], result, state_writes
                 )
                 completed += 1
             except Exception as e:  # noqa: BLE001
-                await client.fail_task(claim["task_id"], worker_id, claim["version"], str(e))
+                await client.fail_task(
+                    claim["task_id"], worker_id, claim["version"], str(e)
+                )
             finally:
                 hb.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await hb
 
 
 def main() -> None:

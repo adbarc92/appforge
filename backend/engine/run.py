@@ -1,4 +1,5 @@
 """Run controller / CLI: boot server, spawn worker subprocesses, drive gates."""
+
 from __future__ import annotations
 
 import argparse
@@ -27,8 +28,17 @@ async def _drive_gates(url, run_id, auto_approve, timeout, poll):
             await asyncio.sleep(poll)
 
 
-async def run_pipeline(idea, workers=4, budget_limit=200.0, auto_approve=True,
-                       db_path=None, host="127.0.0.1", port=None, poll=0.1, timeout=60.0) -> dict:
+async def run_pipeline(
+    idea,
+    workers=4,
+    budget_limit=200.0,
+    auto_approve=True,
+    db_path=None,
+    host="127.0.0.1",
+    port=None,
+    poll=0.1,
+    timeout=60.0,
+) -> dict:
     db_path = db_path or "data/engine.db"
     port = port or free_port()
     url = f"http://{host}:{port}/mcp"
@@ -52,10 +62,19 @@ async def run_pipeline(idea, workers=4, budget_limit=200.0, auto_approve=True,
 
         # spawn worker subprocesses (inside the try so a mid-spawn failure still tears down)
         for i in range(workers):
-            procs.append(await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "backend.engine.worker",
-                "--server-url", url, "--run-id", run_id, "--worker-id", f"w{i}",
-            ))
+            procs.append(
+                await asyncio.create_subprocess_exec(
+                    sys.executable,
+                    "-m",
+                    "backend.engine.worker",
+                    "--server-url",
+                    url,
+                    "--run-id",
+                    run_id,
+                    "--worker-id",
+                    f"w{i}",
+                )
+            )
         worker_pids = [p.pid for p in procs]
 
         final = await _drive_gates(url, run_id, auto_approve, timeout, poll)
@@ -66,7 +85,7 @@ async def run_pipeline(idea, workers=4, budget_limit=200.0, auto_approve=True,
         for p in procs:
             try:
                 await asyncio.wait_for(p.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 p.kill()
         server_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -84,9 +103,14 @@ def main() -> None:
     r.add_argument("--budget-limit", type=float, default=200.0)
     r.add_argument("--no-auto-approve", action="store_true")
     a = p.parse_args()
-    result = asyncio.run(run_pipeline(
-        a.idea, workers=a.workers, budget_limit=a.budget_limit, auto_approve=not a.no_auto_approve
-    ))
+    result = asyncio.run(
+        run_pipeline(
+            a.idea,
+            workers=a.workers,
+            budget_limit=a.budget_limit,
+            auto_approve=not a.no_auto_approve,
+        )
+    )
     print(f"run {result['run_id']}: {result['snapshot']['status']}")
     for ph in result["snapshot"]["phases"]:
         print(f"  {ph['name']:9} {ph['status']:9} gate={ph['gate']}")

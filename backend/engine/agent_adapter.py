@@ -4,6 +4,7 @@ No single execute() signature exists across agents: base MockAgent takes an
 AgentTask and returns AgentResult; specialized/real agents take a dict and
 return a dict. We always PASS a dict and read results defensively.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -36,7 +37,12 @@ async def _run_clarify_loop(task_input, registry, max_questions):
     answers: list[str] = []
     for _ in range(max_questions + 1):
         res = await clarifier.execute(
-            {"idea": idea, "questions": list(questions), "answers": list(answers), "mode": "autonomous"}
+            {
+                "idea": idea,
+                "questions": list(questions),
+                "answers": list(answers),
+                "mode": "autonomous",
+            }
         )
         art = _artifact(res)
         prd = None
@@ -58,11 +64,15 @@ async def _run_clarify_loop(task_input, registry, max_questions):
     return {"agent_id": "clarifying_pm", "output": prd}, {"prd": prd}
 
 
-async def run_agent_task(agent_id, phase, task_input, model, registry, cfg, max_questions=6):
+async def run_agent_task(
+    agent_id, phase, task_input, model, registry, cfg, max_questions=6
+):
     if agent_id == "clarifying_pm":
         return await _run_clarify_loop(task_input, registry, max_questions)
     writes_key = cfg.agents_of(phase)[agent_id].writes
     agent = registry.get(agent_id)
-    res = await agent.execute(dict(task_input, agent_id=agent_id, model=model, mode="autonomous"))
+    res = await agent.execute(
+        dict(task_input, agent_id=agent_id, model=model, mode="autonomous")
+    )
     value = _writes_value(res, writes_key)
     return {"agent_id": agent_id, "output": value}, {writes_key: value}

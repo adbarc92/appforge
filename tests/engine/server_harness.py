@@ -9,6 +9,7 @@ isolates it: the test's client talks to it over HTTP, and stopping joins the
 thread (which closes the Store connection before tmp_path teardown — required
 on win32 for the WAL files).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,7 +38,9 @@ class _ServerThread:
             mcp, store = build_server(self.db_path, **self.kw)
             await store.connect()
             app = mcp.streamable_http_app()
-            config = uvicorn.Config(app, host="127.0.0.1", port=self.port, log_level="error")
+            config = uvicorn.Config(
+                app, host="127.0.0.1", port=self.port, log_level="error"
+            )
             self._server = uvicorn.Server(config)
             self._server.install_signal_handlers = lambda: None
 
