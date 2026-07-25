@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/adbarc92/appforge/actions/workflows/ci.yml/badge.svg)](https://github.com/adbarc92/appforge/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/adbarc92/appforge/releases)
-[![Tests](https://img.shields.io/badge/tests-154%20backend%20%2B%2028%20frontend-brightgreen)](#tests)
+[![Tests](https://img.shields.io/badge/tests-152%20backend%20%2B%2028%20frontend-brightgreen)](#tests)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](#tests)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
@@ -11,7 +11,7 @@
 
 AppForge models a ~14-person software team as **16 specialized agents** that a scheduler dispatches across a **six-phase dependency graph**. The orchestration is not a single async loop — it is a genuine **MCP state server** plus a pool of **independent OS worker processes** that claim and execute work concurrently, coordinating shared state without collision.
 
-> **Status: v1.0 — complete for now.** The orchestration engine is finished, tested (154 backend + 28 frontend tests, ~87% coverage), and feature-frozen; there is no work in flight. Agents run in a deterministic **mock mode** by default (free, fast, reproducible) with a real-Anthropic mode available; the value here is the *orchestration architecture*, which is real and proven — not a finished app generator. Full detail in [`docs/STATUS.md`](docs/STATUS.md).
+> **Status: v1.0 — complete for now.** The orchestration engine is finished, tested (152 backend + 28 frontend tests, ~87% coverage), and feature-frozen; there is no work in flight. Agents run in a deterministic **mock mode** by default (free, fast, reproducible) with a real-Anthropic mode available; the value here is the *orchestration architecture*, which is real and proven — not a finished app generator. Full detail in [`docs/STATUS.md`](docs/STATUS.md).
 
 ---
 
@@ -26,9 +26,9 @@ Most "AI dev team" demos are one process running agents in a loop. AppForge is d
 ## Architecture
 
 ```
-   python -m backend.engine.run     React UI (Socket.IO)
-   ────────────────────────────┐              │
-                               ▼              ▼
+   appforge run "<idea>"            React UI (Socket.IO)
+   ─────────────────────┐                     │
+                        ▼                     ▼
         ┌──────────────────────────────────────────┐
         │  MCP State Server  (FastMCP, HTTP)       │   ← single source of truth
         │  • owns the phase + task DAG             │
@@ -75,8 +75,10 @@ uv sync
 **CLI (headless):** run the full pipeline across N worker processes.
 
 ```bash
-uv run python -m backend.engine.run run "Build a todo app" --workers 4
+uv run appforge run "Build a todo app" --workers 4
 ```
+
+(`uv run python -m backend.engine.run run "..."` is equivalent if you'd rather not install the entry point.)
 
 | Flag | Default | Effect |
 |---|---|---|
@@ -119,7 +121,7 @@ The lease, heartbeat, and reaper settings are what make worker crashes recoverab
 ### Tests
 
 ```bash
-uv run pytest tests/ -q          # backend suite (154 tests, ~87% coverage)
+uv run pytest tests/ -q          # backend suite (152 tests, ~87% coverage)
 uv run ruff check backend/ tests/ && uv run black --check backend/ tests/
 cd frontend && npm test          # frontend suite (28 tests)
 ```

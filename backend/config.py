@@ -55,7 +55,6 @@ class Config:
     budget_limit: float
     anthropic_model: str
     max_clarifying_questions: int
-    enable_phase4: bool
     engine_lease_ttl: float = 120.0
     engine_heartbeat_interval: float = 20.0
     engine_reaper_interval: float = 30.0
@@ -75,7 +74,6 @@ class Config:
             budget_limit=_env_float("BUDGET_LIMIT", 200.0),
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
             max_clarifying_questions=_env_int("MAX_CLARIFYING_QUESTIONS", 6),
-            enable_phase4=_env_bool("ENABLE_PHASE4", True),
             engine_lease_ttl=_env_float("ENGINE_LEASE_TTL", 120.0),
             engine_heartbeat_interval=_env_float("ENGINE_HEARTBEAT_INTERVAL", 20.0),
             engine_reaper_interval=_env_float("ENGINE_REAPER_INTERVAL", 30.0),
