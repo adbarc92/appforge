@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import socketio
 import uvicorn
@@ -6,6 +8,26 @@ import uvicorn
 @pytest.fixture(autouse=True)
 def mock_mode(monkeypatch):
     monkeypatch.setenv("MOCK_AGENTS", "true")
+
+
+def test_each_run_gets_its_own_database(monkeypatch, tmp_path):
+    """Concurrent runs must never share one SQLite file.
+
+    Every start_run boots its own state-server PROCESS, and the store's
+    single-writer guarantee is an in-process asyncio.Lock — it serialises
+    nothing across processes. Two live runs pointed at one file therefore put
+    two OS writers on it, which surfaces as "database is locked" out of
+    claim_next_task (and gets laundered into task retries that fail the run).
+    """
+    from backend.main import _run_db_path
+
+    monkeypatch.setenv("APPFORGE_WEB_DB", str(tmp_path / "web.db"))
+    paths = [_run_db_path() for _ in range(4)]
+
+    assert len(set(paths)) == 4  # every run gets its own writer
+    for p in paths:
+        assert Path(p).parent == tmp_path  # still honours APPFORGE_WEB_DB
+        assert Path(p).suffix == ".db"
 
 
 async def _serve_app(port):

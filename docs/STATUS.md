@@ -7,23 +7,24 @@
 
 ## State summary
 
-**Version:** 1.0.0 (untagged) · **Branch:** `main` @ `74cadcf` · **Status: feature-frozen, one open defect blocking the release.**
-
-> **Active handoff:** [`docs/handoffs/2026-07-25-e2e-database-locked.md`](handoffs/2026-07-25-e2e-database-locked.md) — the `e2e` job is red with `database is locked`. The release is deliberately held until it is green. Read that brief before picking this up.
+**Version:** 1.0.0 (untagged) · **Branch:** `fix/e2e-per-run-db` (PR open) · **Status: feature-frozen; the `e2e` blocker is fixed and awaiting merge.**
 
 AppForge v1.0 is the finished form of what this project set out to prove: a **parallel, MCP-coordinated multi-agent orchestration engine** in which a real MCP state server and a pool of independent OS worker processes drive a product idea through a six-phase dependency graph (Clarify → Design → Code → Test → Deploy → Iterate), with human approval gates and automatic budget-driven model downgrade.
 
-The engine is done, tested, documented, and published under MIT. No new capability is planned — but v1.0.0 is **not yet tagged or released**: the `e2e` CI job fails with `database is locked`, and the user's decision this session was to hold the release until that is resolved. The `v1.0.0` tag exists locally at `ba82ca8` and **points at the wrong commit** (it predates the fresh-clone fix `7bfa00d`); it must be moved before it is ever pushed.
+The engine is done, tested, documented, and published under MIT. No new capability is planned. The `e2e` blocker is resolved on `fix/e2e-per-run-db`: the Playwright suite is green locally (4/4, `data/` absent) with zero `database is locked` errors. Once that PR merges and CI is green on `main`, the release can proceed — the `v1.0.0` tag exists locally at `ba82ca8` and **points at the wrong commit** (it predates the fresh-clone fix `7bfa00d`); it must be moved to the release commit before it is ever pushed.
+
+> **Correction to the previous entry:** the `e2e` job was *not* red because of `database is locked`. It was red because all four Playwright specs predated the engine rewrite and asserted on the retired LangGraph chat flow (`Clarifying question #1` — "element(s) not found"). The lock errors were real but concurrent server-side noise. Both problems are fixed; see the session log below.
 
 ### Readiness
 
 | Signal | State |
 |---|---|
-| Backend suite | **155 passed** (`uv run pytest tests/`) |
-| Coverage | **86.96%** (gate: 70%) |
+| Backend suite | **156 passed** (`uv run pytest tests/`) |
+| Coverage | **86.99%** (gate: 70%) |
 | Frontend suite | **28 passed** across 6 files (`cd frontend && npm test`) |
 | Lint / format | `ruff check` clean · `black --check` clean (67 files) |
-| CI on `main` | `backend` · `frontend` · `validate-config` green; **`e2e` red** (see gaps) |
+| Browser e2e | **4 passed** in ~1.1m (`cd e2e && npx playwright test`), verified with `data/` absent |
+| CI on `main` | `backend` · `frontend` · `validate-config` green; `e2e` red until `fix/e2e-per-run-db` merges |
 | Version | `pyproject.toml` 1.0.0 · `frontend/package.json` 1.0.0 · `backend/main.py` FastAPI 1.0.0 |
 | CLI | `uv run appforge run "<idea>"` (hatchling build backend, entry point installed) |
 | License | MIT (`LICENSE`) |
@@ -46,15 +47,16 @@ The engine is done, tested, documented, and published under MIT. No new capabili
 - **Single-user web bridge.** The live UI targets local single-user use. Multi-tenant lifecycle hardening (per-connection dedup, reconnect durability) is unbuilt.
 - **Historical docs.** `docs/Roadmap.md`, `docs/CoreDesignDocument.md`, and the dated `Status-*.md` files describe the LangGraph-era design and are kept as history only.
 - **Shutdown noise.** A `CancelledError` traceback prints on CLI teardown when the state-server task is cancelled. Cosmetic — the run reports `done` and exits 0 — but it looks alarming.
-- **`e2e` CI job is red — `database is locked`.** *Not* cosmetic and **not yet diagnosed.** The web bridge runs `start_run(workers=4)` against `data/web.db`; under CI those four workers hit lock contention and `claim_next_task` fails with `database is locked`. Ruling one thing out: a missing `busy_timeout` pragma is not the cause, since Python's `sqlite3.connect()` already applies a 5s busy timeout that `aiosqlite` inherits. This was masked until 2026-07-25 by the missing-`data/`-directory bug failing earlier in the same path.
-- **`e2e` specs predate the engine.** Separately, the Playwright specs were last touched 2026-06-02 and still drive the retired LangGraph chat flow (`Clarifying question #N`, `Mock PRD`). Even once the lock contention is resolved, they likely need rewriting or retiring.
+- **One scratch DB file per web run.** The per-run database fix leaves a `data/web-<uuid>.db` (plus `-wal`/`-shm`) behind after each run. `data/` is gitignored scratch and the files are useful for post-hoc inspection, so they are deliberately *not* deleted on teardown — but they accumulate over a long local session.
+- **Plan-gate content is not rendered live.** At the design gate the approval card shows "Approval needed" with no body: `PlanViewer` reads `adr`/`tasks`/`design_spec` from the store, which only the `project_state` (reload) path populates — the live `approval_required` event with `kind: "plan"` deliberately does not overwrite the approved PRD. Reloading shows it. Cosmetic, pre-existing, and out of scope for the e2e fix.
 
 ### Next steps
 
-None required — the project is feature-frozen at 1.0. If it is picked up again, the highest-value candidates, in order:
+1. **Merge `fix/e2e-per-run-db` and confirm CI is green on `main`** — then move the `v1.0.0` tag to the release commit, push it, and cut the GitHub Release.
+2. Decide the leftovers the 2026-07-25 handoff left open: the two unmerged branches (`feat/parallel-mcp-orchestration-engine`, `windows-changes`) and the merged local `fix/create-db-parent-dir` — delete or keep.
 
-1. **Diagnose the `database is locked` contention** that keeps the `e2e` job red — the only known functional defect, and the reason CI is not fully green.
-2. Decide whether the LangGraph-era Playwright specs get rewritten against the engine's flow or retired.
+Beyond that the project is feature-frozen at 1.0. If it is picked up again:
+
 3. Thread real Anthropic token usage into BudgetGuard so budget figures are actual, not simulated.
 4. Harden the web bridge for multi-user / reconnect durability.
 5. Refresh or archive the LangGraph-era design docs so `docs/` matches the shipped engine.
@@ -63,6 +65,17 @@ None required — the project is feature-frozen at 1.0. If it is picked up again
 ---
 
 ## Session log
+
+### 2026-07-25 — `e2e` unblocked: per-run databases + specs rewritten against the engine
+
+Worked [`docs/handoffs/2026-07-25-e2e-database-locked.md`](handoffs/2026-07-25-e2e-database-locked.md). It turned out to be **two** independent defects, and the handoff misattributed which one was red.
+
+- **What actually failed CI.** All four Playwright specs were last touched 2026-06-02 and asserted on the retired LangGraph chat flow — every failure in the job log is `getByText(/Clarifying question #1/)` → "element(s) not found". The `database is locked` tracebacks in the same log were real but were server-side noise, not the failing assertion. The engine runs the clarify Q&A loop *inside* the worker (`product_owner` auto-answers `clarifying_pm`), so the browser never sees per-question chat turns at all.
+- **Specs rewritten, not retired.** The engine's flow is fully drivable through the UI, so retiring the job would have thrown away real coverage. `phase3/phase4.spec.ts` → `clarify-gate.spec.ts` (gate opens with the PRD rendered; the rejection loop re-runs the phase; reload rehydrates from the snapshot) and `full-run.spec.ts` (both gates approved, all six phases to completion).
+- **The lock defect, confirmed and fixed.** The handoff's hypothesis was right: `backend/main.py` passed a constant `data/web.db` into *every* `start_run`, and each `start_run` boots its own state-server **process**. The store's single-writer guarantee is an `asyncio.Lock`, which serialises nothing across processes. Each run now gets a unique sibling of `APPFORGE_WEB_DB` — which is what makes the README's load-bearing "single SQLite writer" claim actually true, rather than true-only-when-one-run-is-alive.
+- **Evidence (A/B, both directions).** Engine level, 4 concurrent runs: shared DB → **4/4 runs failed**, 2 workers killed by `database is locked`; per-run DBs → **4/4 done**, 13/13 tasks each, 0 lock deaths. Browser level, same suite: without the fix → passes but with **3** lock-induced worker crashes; with it → **0**. Contention also *launders* lock errors into task retries that can fail a run outright, so the unfixed build was a live flake source for the new suite.
+- Backend suite **155 → 156** (coverage 86.96% → 86.99%); e2e **4 passed** in ~1.1m. Everything verified with `data/` absent.
+- **State delta:** the last known functional defect is closed and the `e2e` job proves the shipped engine instead of a retired one — the release is unblocked pending merge.
 
 ### 2026-07-25 — handoff written; release held on the `e2e` defect
 
