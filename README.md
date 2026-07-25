@@ -1,7 +1,7 @@
 # AppForge
 
 [![CI](https://github.com/adbarc92/appforge/actions/workflows/ci.yml/badge.svg)](https://github.com/adbarc92/appforge/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/adbarc92/appforge/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/adbarc92/appforge/releases)
 [![Tests](https://img.shields.io/badge/tests-154%20backend%20%2B%2028%20frontend-brightgreen)](#tests)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](#tests)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
