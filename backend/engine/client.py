@@ -6,7 +6,7 @@ from contextlib import AsyncExitStack
 from typing import Any
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 
 class EngineClient:
@@ -17,9 +17,13 @@ class EngineClient:
 
     async def __aenter__(self) -> "EngineClient":
         self._stack = AsyncExitStack()
-        r, w, _ = await self._stack.enter_async_context(streamablehttp_client(self.url))
-        self._session = await self._stack.enter_async_context(ClientSession(r, w))
-        await self._session.initialize()
+        try:
+            r, w, _ = await self._stack.enter_async_context(streamable_http_client(self.url))
+            self._session = await self._stack.enter_async_context(ClientSession(r, w))
+            await self._session.initialize()
+        except BaseException:
+            await self._stack.aclose()  # don't leak the transport if setup fails
+            raise
         return self
 
     async def __aexit__(self, *exc) -> None:

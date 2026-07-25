@@ -63,6 +63,13 @@ class _ServerThread:
                 await store.close()
 
         loop.run_until_complete(_serve())
+        # Drain leftover tasks (e.g. sse_starlette's shutdown watcher) so
+        # loop.close() doesn't emit "Task was destroyed but it is pending!".
+        pending = asyncio.all_tasks(loop)
+        for t in pending:
+            t.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         loop.close()
 
     def start(self) -> None:
@@ -79,8 +86,8 @@ class _ServerThread:
 @asynccontextmanager
 async def running_server(db_path: str, **kw):
     server = _ServerThread(db_path, **kw)
-    server.start()
     try:
+        server.start()
         yield f"http://127.0.0.1:{server.port}/mcp"
     finally:
         server.stop()
