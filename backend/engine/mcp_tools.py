@@ -45,3 +45,12 @@ def register_tools(mcp, store: Store) -> None:
     async def fail_task(task_id: str, worker_id: str, version: int, error: str) -> str:
         await store.fail_task(task_id, worker_id, version, error)
         return json.dumps({"ok": True})
+
+    @mcp.tool()
+    async def submit_approval(run_id: str, phase: str, decision: str) -> str:
+        await store.submit_approval(run_id, phase, decision)
+        return json.dumps({"ok": True})
+
+    @mcp.tool()
+    async def get_run(run_id: str) -> str:
+        return json.dumps(await store.snapshot(run_id))

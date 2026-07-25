@@ -58,3 +58,9 @@ class EngineClient:
 
     async def fail_task(self, task_id, worker_id, version, error: str) -> None:
         await self._call("fail_task", task_id=task_id, worker_id=worker_id, version=version, error=error)
+
+    async def submit_approval(self, run_id: str, phase: str, decision: str) -> None:
+        await self._call("submit_approval", run_id=run_id, phase=phase, decision=decision)
+
+    async def get_run(self, run_id: str) -> dict:
+        return await self._call("get_run", run_id=run_id)

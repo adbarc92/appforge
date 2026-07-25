@@ -273,3 +273,24 @@ class Store:
                     await self._db.execute("UPDATE phases SET gate='rejected', status='open' WHERE run_id=? AND name=?", (run_id, phase))
                     await self._db.execute("UPDATE tasks SET status='blocked', owner=NULL WHERE run_id=? AND phase=?", (run_id, phase))
                 await self._recompute_ready_locked(run_id)
+
+    async def snapshot(self, run_id: str) -> dict:
+        cur = await self._db.execute("SELECT status FROM runs WHERE run_id=?", (run_id,))
+        run_row = await cur.fetchone()
+        run_status = run_row["status"] if run_row else "unknown"
+        phases = await self._all_phases(run_id)
+        tasks = await self._all_tasks(run_id)
+        terminal = max(phases, key=lambda p: p["phase_order"]) if phases else None
+        if run_status == "failed":
+            status = "failed"
+        elif terminal is not None and terminal["status"] == "complete":
+            status = "done"
+        else:
+            status = "running"
+        return {
+            "run_id": run_id,
+            "status": status,
+            "phases": [{"name": p["name"], "status": p["status"], "gate": p["gate"]} for p in phases],
+            "tasks": [{"agent_id": t["agent_id"], "phase": t["phase"],
+                       "status": t["status"], "owner": t["owner"]} for t in tasks],
+        }
