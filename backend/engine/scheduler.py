@@ -1,4 +1,5 @@
 """Pure scheduling logic. No DB, no I/O — takes plain dicts, returns plans."""
+
 from __future__ import annotations
 
 from backend.engine.phases import PhasesConfig
@@ -20,7 +21,9 @@ def seed_specs_for_phase(
                 "agent_id": aid,
                 "phase": phase_name,
                 "phase_order": order,
-                "depends_on": [task_id(run_id, phase_name, dep) for dep in spec.depends_on],
+                "depends_on": [
+                    task_id(run_id, phase_name, dep) for dep in spec.depends_on
+                ],
                 "sim_cost": spec.sim_cost,
                 "model": base_models.get(aid),
                 "input_keys": list(spec.reads),
@@ -64,10 +67,17 @@ def advance(phases: list[dict], tasks: list[dict], cfg: PhasesConfig) -> dict:
             if gate != "none":
                 open_gates.append(gate)  # next phase waits for submit_approval
             else:
-                nxt = next((q for q in ordered if q["phase_order"] == p["phase_order"] + 1), None)
+                nxt = next(
+                    (q for q in ordered if q["phase_order"] == p["phase_order"] + 1),
+                    None,
+                )
                 if nxt is not None:
                     open_phases.append(nxt["name"])
-    return {"complete_phases": complete_phases, "open_gates": open_gates, "open_phases": open_phases}
+    return {
+        "complete_phases": complete_phases,
+        "open_gates": open_gates,
+        "open_phases": open_phases,
+    }
 
 
 def resolve_model(

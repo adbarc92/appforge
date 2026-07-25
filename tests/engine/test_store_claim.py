@@ -4,7 +4,7 @@ from backend.engine.phases import PhasesConfig
 from backend.engine.store import Store
 
 CFG = PhasesConfig.load("config/phases.yaml")
-BASE = {aid: "gpt-4o" for aid in CFG.all_agent_ids()}
+BASE = dict.fromkeys(CFG.all_agent_ids(), "gpt-4o")
 
 
 @pytest.fixture
@@ -38,7 +38,9 @@ async def test_heartbeat_owner_guarded(store):
 async def test_reaper_reverts_and_bumps_version(store):
     c = await store.claim_next_task("r1", "w1")
     # force the lease into the past
-    await store._db.execute("UPDATE tasks SET lease_expires=? WHERE task_id=?", (0.0, c.task_id))
+    await store._db.execute(
+        "UPDATE tasks SET lease_expires=? WHERE task_id=?", (0.0, c.task_id)
+    )
     await store._db.commit()
     n = await store.reap_expired()
     assert n == 1

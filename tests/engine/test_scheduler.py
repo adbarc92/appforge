@@ -2,9 +2,15 @@ from backend.engine import scheduler as sch
 from backend.engine.phases import PhasesConfig
 
 CFG = PhasesConfig.load("config/phases.yaml")
-BASE = {"clarifying_pm": "claude-3-5-sonnet-20241022", "database": "gpt-4o",
-        "backend": "claude-3-5-sonnet-20241022", "frontend": "claude-3-5-sonnet-20241022",
-        "ai_ml": "claude-3-5-sonnet-20241022", "qa_test": "gpt-4o", "security": "claude-3-5-sonnet-20241022"}
+BASE = {
+    "clarifying_pm": "claude-3-5-sonnet-20241022",
+    "database": "gpt-4o",
+    "backend": "claude-3-5-sonnet-20241022",
+    "frontend": "claude-3-5-sonnet-20241022",
+    "ai_ml": "claude-3-5-sonnet-20241022",
+    "qa_test": "gpt-4o",
+    "security": "claude-3-5-sonnet-20241022",
+}
 
 
 def test_seed_clarify_makes_one_task():
@@ -15,7 +21,9 @@ def test_seed_clarify_makes_one_task():
 
 
 def test_seed_code_maps_intra_phase_edges_to_task_ids():
-    seeds = {s["agent_id"]: s for s in sch.seed_specs_for_phase(CFG, "r1", "code", BASE)}
+    seeds = {
+        s["agent_id"]: s for s in sch.seed_specs_for_phase(CFG, "r1", "code", BASE)
+    }
     assert seeds["backend"]["depends_on"] == ["r1:code:database"]
     assert seeds["frontend"]["depends_on"] == ["r1:code:backend"]
     assert seeds["ai_ml"]["depends_on"] == []
@@ -39,20 +47,46 @@ def test_compute_ready_skips_closed_phase():
 
 def test_advance_completes_phase_and_opens_gate():
     phases = [
-        {"name": "clarify", "phase_order": 0, "status": "open", "gate": "prd", "seeded": 1},
-        {"name": "design", "phase_order": 1, "status": "blocked", "gate": "plan", "seeded": 0},
+        {
+            "name": "clarify",
+            "phase_order": 0,
+            "status": "open",
+            "gate": "prd",
+            "seeded": 1,
+        },
+        {
+            "name": "design",
+            "phase_order": 1,
+            "status": "blocked",
+            "gate": "plan",
+            "seeded": 0,
+        },
     ]
     tasks = [{"task_id": "c", "phase": "clarify", "status": "done", "depends_on": []}]
     plan = sch.advance(phases, tasks, CFG)
     assert "clarify" in plan["complete_phases"]
-    assert "prd" in [g for g in plan["open_gates"]]  # gate goes pending, next phase NOT opened yet
+    assert "prd" in list(
+        plan["open_gates"]
+    )  # gate goes pending, next phase NOT opened yet
     assert plan["open_phases"] == []
 
 
 def test_advance_ungated_opens_next_phase():
     phases = [
-        {"name": "code", "phase_order": 2, "status": "open", "gate": "none", "seeded": 1},
-        {"name": "test", "phase_order": 3, "status": "blocked", "gate": "none", "seeded": 0},
+        {
+            "name": "code",
+            "phase_order": 2,
+            "status": "open",
+            "gate": "none",
+            "seeded": 1,
+        },
+        {
+            "name": "test",
+            "phase_order": 3,
+            "status": "blocked",
+            "gate": "none",
+            "seeded": 0,
+        },
     ]
     tasks = [{"task_id": "x", "phase": "code", "status": "done", "depends_on": []}]
     plan = sch.advance(phases, tasks, CFG)
@@ -61,27 +95,64 @@ def test_advance_ungated_opens_next_phase():
 
 
 def test_unseeded_or_empty_phase_never_completes():
-    phases = [{"name": "test", "phase_order": 3, "status": "open", "gate": "none", "seeded": 0}]
+    phases = [
+        {
+            "name": "test",
+            "phase_order": 3,
+            "status": "open",
+            "gate": "none",
+            "seeded": 0,
+        }
+    ]
     plan = sch.advance(phases, [], CFG)
     assert plan["complete_phases"] == []
 
 
 def test_resolve_model_downgrades_over_threshold():
-    dp = {"gpt-4o": "gpt-4o-mini", "claude-3-5-sonnet-20241022": "claude-3-5-haiku-20241022"}
+    dp = {
+        "gpt-4o": "gpt-4o-mini",
+        "claude-3-5-sonnet-20241022": "claude-3-5-haiku-20241022",
+    }
     skip = {"clarifying_pm", "solution_architect"}
     assert sch.resolve_model("qa_test", "gpt-4o", 0.90, dp, skip) == "gpt-4o-mini"
-    assert sch.resolve_model("qa_test", "gpt-4o", 0.50, dp, skip) == "gpt-4o"      # under threshold
-    assert sch.resolve_model("solution_architect", "claude-3-5-sonnet-20241022", 0.99, dp, skip) == "claude-3-5-sonnet-20241022"  # protected
-    assert sch.resolve_model("technical_writer", "gpt-4o-mini", 0.99, dp, skip) == "gpt-4o-mini"  # no successor
+    assert (
+        sch.resolve_model("qa_test", "gpt-4o", 0.50, dp, skip) == "gpt-4o"
+    )  # under threshold
+    assert (
+        sch.resolve_model(
+            "solution_architect", "claude-3-5-sonnet-20241022", 0.99, dp, skip
+        )
+        == "claude-3-5-sonnet-20241022"
+    )  # protected
+    assert (
+        sch.resolve_model("technical_writer", "gpt-4o-mini", 0.99, dp, skip)
+        == "gpt-4o-mini"
+    )  # no successor
 
 
 def test_advance_guard_seeded_but_empty_never_completes():
-    phases = [{"name": "test", "phase_order": 3, "status": "open", "gate": "none", "seeded": 1}]
+    phases = [
+        {
+            "name": "test",
+            "phase_order": 3,
+            "status": "open",
+            "gate": "none",
+            "seeded": 1,
+        }
+    ]
     assert sch.advance(phases, [], CFG)["complete_phases"] == []
 
 
 def test_advance_guard_unseeded_with_done_task_never_completes():
-    phases = [{"name": "test", "phase_order": 3, "status": "open", "gate": "none", "seeded": 0}]
+    phases = [
+        {
+            "name": "test",
+            "phase_order": 3,
+            "status": "open",
+            "gate": "none",
+            "seeded": 0,
+        }
+    ]
     tasks = [{"task_id": "x", "phase": "test", "status": "done", "depends_on": []}]
     assert sch.advance(phases, tasks, CFG)["complete_phases"] == []
 
@@ -89,6 +160,12 @@ def test_advance_guard_unseeded_with_done_task_never_completes():
 def test_resolve_model_edge_cases():
     dp = {"gpt-4o": "gpt-4o-mini"}
     skip = {"clarifying_pm", "solution_architect"}
-    assert sch.resolve_model("backend", None, 0.99, dp, skip) is None            # None passthrough
-    assert sch.resolve_model("qa_test", "gpt-4o", 0.85, dp, skip) == "gpt-4o-mini"  # exact threshold downgrades
-    assert sch.resolve_model("clarifying_pm", "gpt-4o", 0.99, dp, skip) == "gpt-4o"  # critical protected
+    assert (
+        sch.resolve_model("backend", None, 0.99, dp, skip) is None
+    )  # None passthrough
+    assert (
+        sch.resolve_model("qa_test", "gpt-4o", 0.85, dp, skip) == "gpt-4o-mini"
+    )  # exact threshold downgrades
+    assert (
+        sch.resolve_model("clarifying_pm", "gpt-4o", 0.99, dp, skip) == "gpt-4o"
+    )  # critical protected

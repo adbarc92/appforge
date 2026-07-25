@@ -1,4 +1,5 @@
 """SQL schema + typed result models for the engine store."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel
