@@ -60,6 +60,7 @@ class Store:
             raise
 
     async def create_run(self, run_id: str, idea: str, budget_limit: float) -> None:
+        entry = self.cfg.phase_names[0]  # order-0 phase (phase_names is order-sorted)
         async with self._db_lock, self._txn():
             now = self._now()
             await self._db.execute(
@@ -68,12 +69,12 @@ class Store:
             )
             for name in self.cfg.phase_names:
                 order = self.cfg.order_of(name)
-                status = "open" if name == "clarify" else "blocked"
+                status = "open" if name == entry else "blocked"
                 await self._db.execute(
                     "INSERT INTO phases (run_id, name, phase_order, status, gate, seeded) VALUES (?,?,?,?,?,0)",
                     (run_id, name, order, status, self.cfg.gate_of(name)),
                 )
-            await self._seed_phase_locked(run_id, "clarify", now)
+            await self._seed_phase_locked(run_id, entry, now)
             await self._recompute_ready_locked(run_id)
 
     async def _seed_phase_locked(
