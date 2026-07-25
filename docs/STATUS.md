@@ -7,11 +7,13 @@
 
 ## State summary
 
-**Version:** 1.0.0 · **Branch:** `main` · **Status: complete for now (feature-frozen).**
+**Version:** 1.0.0 (untagged) · **Branch:** `main` @ `74cadcf` · **Status: feature-frozen, one open defect blocking the release.**
+
+> **Active handoff:** [`docs/handoffs/2026-07-25-e2e-database-locked.md`](handoffs/2026-07-25-e2e-database-locked.md) — the `e2e` job is red with `database is locked`. The release is deliberately held until it is green. Read that brief before picking this up.
 
 AppForge v1.0 is the finished form of what this project set out to prove: a **parallel, MCP-coordinated multi-agent orchestration engine** in which a real MCP state server and a pool of independent OS worker processes drive a product idea through a six-phase dependency graph (Clarify → Design → Code → Test → Deploy → Iterate), with human approval gates and automatic budget-driven model downgrade.
 
-The engine is done, tested, documented, and published under MIT. There is no in-flight work and no next phase queued. Further work would be enhancement, not completion.
+The engine is done, tested, documented, and published under MIT. No new capability is planned — but v1.0.0 is **not yet tagged or released**: the `e2e` CI job fails with `database is locked`, and the user's decision this session was to hold the release until that is resolved. The `v1.0.0` tag exists locally at `ba82ca8` and **points at the wrong commit** (it predates the fresh-clone fix `7bfa00d`); it must be moved before it is ever pushed.
 
 ### Readiness
 
@@ -61,6 +63,14 @@ None required — the project is feature-frozen at 1.0. If it is picked up again
 ---
 
 ## Session log
+
+### 2026-07-25 — handoff written; release held on the `e2e` defect
+
+- PR #11 merged; `main` @ `74cadcf`. `backend`, `frontend`, and `validate-config` are green — `e2e` is not.
+- Wrote [`docs/handoffs/2026-07-25-e2e-database-locked.md`](handoffs/2026-07-25-e2e-database-locked.md) for whoever picks up the `database is locked` diagnosis. It carries the leading (unverified) hypothesis: `backend/main.py:99` passes a constant `data/web.db` into every `start_run`, so two concurrent runs put two OS processes on one SQLite file, which the store's in-process `asyncio.Lock` cannot serialise.
+- **User decisions this session:** hold the tag and GitHub Release until `e2e` is green; the successor works autonomously.
+- Repo hygiene: 8 stale agent worktrees and their branches removed, 9 merged local and 4 merged remote branches deleted.
+- **State delta:** v1.0 work fully landed on `main`, with a single named blocker and a written brief standing between it and a tagged release.
 
 ### 2026-07-25 — fix: the engine could not start on a fresh clone
 
