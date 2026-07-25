@@ -7,13 +7,15 @@
 
 ## State summary
 
-**Version:** 1.0.0 (untagged) · **Branch:** `fix/e2e-per-run-db` (PR open) · **Status: feature-frozen; the `e2e` blocker is fixed and awaiting merge.**
+**Version:** 1.0.0 · **Branch:** `main` @ `d24ccab` · **Status: released. Feature-frozen, CI fully green, no known functional defects.**
+
+> **[v1.0.0 is tagged and released.](https://github.com/adbarc92/appforge/releases/tag/v1.0.0)** The tag sits on `d24ccab` — the first commit with all five CI jobs green — and was smoke-tested from a genuine fresh clone (`git clone && uv sync && uv run appforge run "…"` drives all six phases to `complete`, exit 0).
 
 AppForge v1.0 is the finished form of what this project set out to prove: a **parallel, MCP-coordinated multi-agent orchestration engine** in which a real MCP state server and a pool of independent OS worker processes drive a product idea through a six-phase dependency graph (Clarify → Design → Code → Test → Deploy → Iterate), with human approval gates and automatic budget-driven model downgrade.
 
-The engine is done, tested, documented, and published under MIT. No new capability is planned. The `e2e` blocker is resolved on `fix/e2e-per-run-db`: the Playwright suite is green locally (4/4, `data/` absent) with zero `database is locked` errors. Once that PR merges and CI is green on `main`, the release can proceed — the `v1.0.0` tag exists locally at `ba82ca8` and **points at the wrong commit** (it predates the fresh-clone fix `7bfa00d`); it must be moved to the release commit before it is ever pushed.
+The engine is done, tested, documented, released under MIT, and every CI job is green. No new capability is planned and nothing is in flight.
 
-> **Correction to the previous entry:** the `e2e` job was *not* red because of `database is locked`. It was red because all four Playwright specs predated the engine rewrite and asserted on the retired LangGraph chat flow (`Clarifying question #1` — "element(s) not found"). The lock errors were real but concurrent server-side noise. Both problems are fixed; see the session log below.
+> **Correction to the 2026-07-25 handoff:** the `e2e` job was *not* red because of `database is locked`. It was red because all four Playwright specs predated the engine rewrite and asserted on the retired LangGraph chat flow (`Clarifying question #1` — "element(s) not found"). The lock errors were real but concurrent server-side noise. Both problems were fixed in [PR #13](https://github.com/adbarc92/appforge/pull/13); see the session log below.
 
 ### Readiness
 
@@ -24,7 +26,8 @@ The engine is done, tested, documented, and published under MIT. No new capabili
 | Frontend suite | **28 passed** across 6 files (`cd frontend && npm test`) |
 | Lint / format | `ruff check` clean · `black --check` clean (67 files) |
 | Browser e2e | **4 passed** in ~1.1m (`cd e2e && npx playwright test`), verified with `data/` absent |
-| CI on `main` | `backend` · `frontend` · `validate-config` green; `e2e` red until `fix/e2e-per-run-db` merges |
+| CI on `main` | **all five green** at `d24ccab` — `backend (3.11)` · `backend (3.12)` · `frontend` · `e2e` · `validate-config` |
+| Fresh clone | `git clone --branch v1.0.0 && uv sync && uv run appforge run "…"` → all six phases `complete`, exit 0 |
 | Version | `pyproject.toml` 1.0.0 · `frontend/package.json` 1.0.0 · `backend/main.py` FastAPI 1.0.0 |
 | CLI | `uv run appforge run "<idea>"` (hatchling build backend, entry point installed) |
 | License | MIT (`LICENSE`) |
@@ -46,25 +49,30 @@ The engine is done, tested, documented, and published under MIT. No new capabili
 - **Mock by design.** The documented run and the whole suite use deterministic mock agents. Real-Anthropic mode works but is not what the tests exercise; AppForge is an orchestration architecture, not a finished app generator.
 - **Single-user web bridge.** The live UI targets local single-user use. Multi-tenant lifecycle hardening (per-connection dedup, reconnect durability) is unbuilt.
 - **Historical docs.** `docs/Roadmap.md`, `docs/CoreDesignDocument.md`, and the dated `Status-*.md` files describe the LangGraph-era design and are kept as history only.
-- **Shutdown noise.** A `CancelledError` traceback prints on CLI teardown when the state-server task is cancelled. Cosmetic — the run reports `done` and exits 0 — but it looks alarming.
+- **Shutdown noise — investigated, deliberately not fixed.** A `CancelledError` traceback prints on CLI teardown when the state-server task is cancelled. Cosmetic: the run reports `done` and exits 0. The obvious fix — graceful shutdown (`server.should_exit = True` and await, the pattern in [`tests/engine/server_harness.py`](../tests/engine/server_harness.py)) instead of `stop_run`'s outright `cancel()` — **was built and rejected: it hangs the test suite.** With two in-loop servers in one process the second `stop_run` never returns, because uvicorn's graceful path waits on FastMCP's streamable-HTTP session manager, which is not torn down between tests (the hazard `server_harness.py`'s docstring already describes). A 10s timeout + cancel fallback does not rescue it — the task is stuck where cancellation is swallowed. Confirmed by A/B on `test_budget_downgrade_live.py` + `test_concurrency_no_collision.py`: cancel-based teardown completes, graceful teardown hangs (`timeout` exit 124). **The `cancel()` in `stop_run` is load-bearing, not sloppy** — it is what forces the session manager down. Anyone revisiting this must solve the session-manager teardown first; do not simply swap in `should_exit`.
 - **One scratch DB file per web run.** The per-run database fix leaves a `data/web-<uuid>.db` (plus `-wal`/`-shm`) behind after each run. `data/` is gitignored scratch and the files are useful for post-hoc inspection, so they are deliberately *not* deleted on teardown — but they accumulate over a long local session.
 - **Plan-gate content is not rendered live.** At the design gate the approval card shows "Approval needed" with no body: `PlanViewer` reads `adr`/`tasks`/`design_spec` from the store, which only the `project_state` (reload) path populates — the live `approval_required` event with `kind: "plan"` deliberately does not overwrite the approved PRD. Reloading shows it. Cosmetic, pre-existing, and out of scope for the e2e fix.
 
 ### Next steps
 
-1. **Merge `fix/e2e-per-run-db` and confirm CI is green on `main`** — then move the `v1.0.0` tag to the release commit, push it, and cut the GitHub Release.
-2. Decide the leftovers the 2026-07-25 handoff left open: the two unmerged branches (`feat/parallel-mcp-orchestration-engine`, `windows-changes`) and the merged local `fix/create-db-parent-dir` — delete or keep.
+None. v1.0.0 is released, CI is fully green, and there are no known functional defects. If the project is picked up again, the highest-value candidates:
 
-Beyond that the project is feature-frozen at 1.0. If it is picked up again:
-
-3. Thread real Anthropic token usage into BudgetGuard so budget figures are actual, not simulated.
-4. Harden the web bridge for multi-user / reconnect durability.
-5. Refresh or archive the LangGraph-era design docs so `docs/` matches the shipped engine.
-6. Silence the `CancelledError` teardown traceback in `stop_run`.
+1. Thread real Anthropic token usage into BudgetGuard so budget figures are actual, not simulated.
+2. Harden the web bridge for multi-user / reconnect durability.
+3. Refresh or archive the LangGraph-era design docs so `docs/` matches the shipped engine.
+4. Render the plan-gate content live (see gaps) — small, self-contained frontend/bridge work.
+5. The `CancelledError` teardown traceback — **only with a real plan for FastMCP's session-manager teardown.** The naive graceful-shutdown fix was tried and rejected; see the gap entry above before spending time here.
 
 ---
 
 ## Session log
+
+### 2026-07-25 — v1.0.0 released; graceful-shutdown follow-up tried and rejected
+
+- **Released.** PR #13 merged (`d24ccab`), all five CI jobs green on `main`, the `v1.0.0` tag moved off `ba82ca8` onto the green merge commit, pushed, and the [GitHub Release](https://github.com/adbarc92/appforge/releases/tag/v1.0.0) cut. Verified before publishing by cloning the tag fresh: `uv sync && uv run appforge run "…"` drove all six phases to `complete`, exit 0.
+- **Branch hygiene.** `feat/parallel-mcp-orchestration-engine` deleted — it held exactly one unique commit (a lint pass), sat 40 commits behind `main`, and `main` is already ruff/black clean. `windows-changes` turned out to be an abandoned January 2026 prototype (a separate `src/appforge/` tree, ~2100 lines + ~660 lines of tests, branched from `24bb40b`), not a stash of current work; archived as the tag **`archive/windows-changes`** and the branch deleted from local and remote.
+- **The `CancelledError` follow-up was built, measured, and abandoned.** Swapping `stop_run`'s `cancel()` for uvicorn's graceful `should_exit` made the CLI teardown clean (0 tracebacks) and passed in isolation — then hung the test suite. Two in-loop servers in one process, and the second `stop_run` never returns: uvicorn's graceful path waits on FastMCP's streamable-HTTP session manager, which is not torn down between tests. A 10s timeout plus a cancel fallback did not rescue it. A/B on `test_budget_downgrade_live.py` + `test_concurrency_no_collision.py`: cancel-based teardown completes, graceful teardown hangs (`timeout` exit 124). Reverted in full; the suite is back to **156 passed**. The finding is recorded in Known gaps because the conclusion is counter-intuitive: **the `cancel()` is load-bearing.**
+- **State delta:** shipped and tagged, with one fewer plausible-looking trap for the next session.
 
 ### 2026-07-25 — `e2e` unblocked: per-run databases + specs rewritten against the engine
 
