@@ -9,9 +9,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from contextlib import asynccontextmanager
 from typing import Any
 
 import socketio
+import structlog
 from fastapi import FastAPI
 
 from backend.engine import webbridge
@@ -19,7 +21,16 @@ from backend.engine.client import EngineClient
 from backend.engine.run import RunHandle, start_run, stop_run
 from backend.engine.state_server import base_models_from_config
 
-app = FastAPI(title="AppForge engine backend", version="1.0.0")
+logger = structlog.get_logger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(_app):
+    yield
+    await shutdown()
+
+
+app = FastAPI(title="AppForge engine backend", version="1.0.0", lifespan=_lifespan)
 sio = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -48,7 +59,8 @@ async def _poll_and_emit(project_id: str, room: str) -> None:
                     k: v["value"]
                     for k, v in (await c.get_state(handle.run_id, keys)).items()
                 }
-        except Exception:  # noqa: BLE001 - server may be tearing down
+        except Exception as e:  # noqa: BLE001 - server may be tearing down
+            logger.warning("web.poller_error", project_id=project_id, error=str(e))
             return
         for event, payload in webbridge.diff_to_events(prev, snap, state, _BASE_MODELS):
             await sio.emit(event, payload, room=room)
@@ -64,6 +76,8 @@ async def _poll_and_emit(project_id: str, room: str) -> None:
                 },
                 room=room,
             )
+            await stop_run(handle)
+            _runs.pop(project_id, None)
             return
         await asyncio.sleep(0.4)
 

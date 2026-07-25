@@ -65,5 +65,9 @@ async def test_start_project_drives_engine_and_reaches_prd_gate(tmp_path, monkey
         assert appr and appr[0]["content"]  # PRD content present
     finally:
         await client.disconnect()
+
+        from backend.main import shutdown
+
+        await shutdown()
         server.should_exit = True
         await task
