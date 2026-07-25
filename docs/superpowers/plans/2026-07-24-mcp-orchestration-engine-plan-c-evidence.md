@@ -15,7 +15,7 @@
 - **CI must stay green:** `uv run ruff check backend/ tests/` (0 errors), `uv run black --check backend/ tests/` (clean), `uv run pytest tests/ --cov-fail-under=70`. **Every task's final step runs `ruff check` + `black --check` on the files it touched** and fixes any finding before commit (the plan code is written Black-compatible, but verify).
 - **Budget facts (from `config/phases.yaml` sim_costs):** Clarify 0.30 + Design 1.30 + Code 2.70 = **4.30** committed by the time Test opens. With `--budget-limit 5.0`, `spend_ratio` at Test-open = 0.86 ≥ 0.85 → `qa_test` (gpt-4o→gpt-4o-mini) and `security` (claude-3-5-sonnet-20241022→claude-3-5-haiku-20241022) are downgraded; critical agents (`clarifying_pm`, `solution_architect`) never are.
 - **Authoritative downgrade paths** live in `config/budget.yaml` (`downgrade_paths`), loaded via `backend.engine.phases.load_downgrade_paths`.
-- **Mock mode only** (`MOCK_AGENTS=true`). No "OpenBarclay". Commits: no attribution footer.
+- **Mock mode only** (`MOCK_AGENTS=true`). No LLC name. Commits: no attribution footer.
 
 ---
 

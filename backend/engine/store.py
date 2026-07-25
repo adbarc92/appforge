@@ -399,6 +399,15 @@ class Store:
             status = "done"
         else:
             status = "running"
+        cur = await self._db.execute(
+            "SELECT COALESCE(SUM(cost),0) AS s FROM spend WHERE run_id=?", (run_id,)
+        )
+        spent = (await cur.fetchone())["s"]
+        cur = await self._db.execute(
+            "SELECT budget_limit FROM runs WHERE run_id=?", (run_id,)
+        )
+        row = await cur.fetchone()
+        limit = row["budget_limit"] if row else 0.0
         return {
             "run_id": run_id,
             "status": status,
@@ -416,4 +425,5 @@ class Store:
                 }
                 for t in tasks
             ],
+            "budget": {"spent": spent, "limit": limit},
         }

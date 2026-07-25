@@ -25,7 +25,7 @@ const LAYOUT: Record<string, { x: number; y: number }> = {
   ai_ml: { x: 550, y: 360 },
   devops: { x: 100, y: 500 },
   security: { x: 250, y: 500 },
-  qa: { x: 400, y: 500 },
+  qa_test: { x: 400, y: 500 },
   technical_writer: { x: 550, y: 500 },
   delivery_summarizer: { x: 400, y: 620 },
 };

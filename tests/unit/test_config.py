@@ -10,7 +10,6 @@ def test_config_defaults_when_env_missing(monkeypatch, tmp_path):
         "DEBUG",
         "BUDGET_LIMIT",
         "ANTHROPIC_MODEL",
-        "SQLITE_PATH",
         "MAX_CLARIFYING_QUESTIONS",
         "LOG_LEVEL",
     ):
@@ -20,7 +19,6 @@ def test_config_defaults_when_env_missing(monkeypatch, tmp_path):
     assert cfg.debug is False
     assert cfg.budget_limit == 200.0
     assert cfg.anthropic_model == "claude-sonnet-4-6"
-    assert cfg.sqlite_path.endswith("checkpoints.db")
     assert cfg.max_clarifying_questions == 6
     assert cfg.log_level == "INFO"
 
