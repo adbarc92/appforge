@@ -31,7 +31,7 @@ function NewProject() {
         onSubmit={onSubmit}
         className="max-w-xl w-full space-y-4 bg-white p-8 rounded shadow"
       >
-        <h1 className="text-2xl font-semibold">DevTeam.AI</h1>
+        <h1 className="text-2xl font-semibold">AppForge</h1>
         <p className="text-sm text-gray-600">
           Describe the thing you want to build. The Clarifying PM will ask up
           to 6 questions and produce a PRD.

@@ -1,5 +1,5 @@
 """
-DevTeam.AI - BudgetGuard Tests
+AppForge - BudgetGuard Tests
 Phase 2: Agent Framework + BudgetGuard
 
 Tests for BudgetGuard including:

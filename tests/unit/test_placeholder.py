@@ -1,5 +1,5 @@
 """
-DevTeam.AI - Placeholder Test
+AppForge - Placeholder Test
 
 This file ensures pytest can run even before real tests are added.
 It will be replaced with actual tests in Phase 1.

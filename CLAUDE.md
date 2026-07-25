@@ -1,20 +1,21 @@
-# CLAUDE.md - AI Assistant Context for DevTeam.AI
+# CLAUDE.md - AI Assistant Context for AppForge
 
-<!-- BEGIN: ACTIVE-SESSION-PICKUP — remove this block once Phase 6 work begins on its own branch -->
+<!-- BEGIN: ACTIVE-SESSION-PICKUP — remove this block if the project leaves the v1.0 freeze -->
 ## Active session pickup
 
-Phases 0–4 are merged to `main` (Phase 4 Parallel Planning Sprint shipped 2026-06-02). Before starting new work, read [`docs/Status-2026_06_02.md`](docs/Status-2026_06_02.md). It documents:
+**AppForge is at v1.0 and feature-frozen — complete for now.** There is no work in flight. Read [`docs/STATUS.md`](docs/STATUS.md) (the canonical, living status doc) before starting anything.
 
-- the roadmap position (Phase 5 ~60%; **Phase 6 — Specialist Agents is next and now unblocked**),
-- key Phase 4 facts a new session needs (`ENABLE_PHASE4` is default ON; the list-return fan-out → `planning_fan_in` (emits the card once) → `planning_approval` (interrupt only) shape; the `kind:"prd"|"plan"` gate discriminator; `load_snapshot` detects the plan gate by artifact presence),
-- tracked non-blocking follow-ups (real token cost threading, LangSmith tracing, Phase-5 multi-project recall).
+Two things to know before trusting the rest of this file:
 
-Once Phase 6 (or other new work) has its own branch and status doc, this block is stale — delete it.
+- **The LangGraph orchestrator was retired** in the 2026-07 rewrite (commit `155155e`). The engine is now an MCP state server + independent worker processes under `backend/engine/`. Sections below that describe `backend/orchestrator.py`, `backend/graph.py`, `SqliteSaver` checkpoints, or `ENABLE_PHASE4` are **historical**.
+- **The dated `docs/Status-*.md` files are frozen history**, as are `docs/Roadmap.md` and `docs/CoreDesignDocument.md`. `docs/STATUS.md` supersedes them.
+
+The current architecture, the evidence tests behind each claim, and the ranked follow-up list live in [`README.md`](README.md) and [`docs/STATUS.md`](docs/STATUS.md).
 <!-- END: ACTIVE-SESSION-PICKUP -->
 
 ## Project Overview
 
-**DevTeam.AI** is a fully autonomous, parallel-first, iterative multi-agent system that replicates a 12-14 person modern software development team. The system takes a natural-language idea from a human user (acting as Product Owner) and orchestrates specialized AI agents to clarify requirements, design solutions, write code, test, deploy, and iterate until the product is shipped.
+**AppForge** is a fully autonomous, parallel-first, iterative multi-agent system that replicates a 12-14 person modern software development team. The system takes a natural-language idea from a human user (acting as Product Owner) and orchestrates specialized AI agents to clarify requirements, design solutions, write code, test, deploy, and iterate until the product is shipped.
 
 **Core Vision**: From idea → clarification → design → code → test → deploy → iterate → ship, with minimal human input beyond explicit approval gates.
 
@@ -158,7 +159,7 @@ def create_agent(name: str, emit_callback: Callable) -> Any:
 ## File Structure
 
 ```
-devteam-ai/
+appforge/
 ├── backend/
 │   ├── agents/              # Agent implementations
 │   │   ├── base_agent.py   # InstrumentedAgent base class
@@ -275,7 +276,7 @@ Then open <http://localhost:5173/>.
 
 ### Phase-Based Development
 
-DevTeam.AI follows a 15-phase roadmap (see Roadmap.md). Each phase:
+AppForge follows a 15-phase roadmap (see Roadmap.md). Each phase:
 1. Has a testable deliverable
 2. Must pass all tests from prior phases (regression)
 3. May require human approval before advancing
@@ -451,7 +452,7 @@ uv run pytest tests/unit/
 uv run pytest tests/integration/
 
 # Phase-specific
-DEVTEAM_PHASE=3 uv run pytest tests/regression/
+APPFORGE_PHASE=3 uv run pytest tests/regression/
 ```
 
 ### Coverage Requirements

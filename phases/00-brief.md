@@ -5,7 +5,7 @@ Everything must be 100% local-first (no Redis, no external services yet).
 
 ### REQUIRED FILES & EXACT CONTENTS
 
-1. GitHub repository (public or private) named `devteam-ai-2025` (or your preferred name)
+1. GitHub repository (public or private) named `appforge` (or your preferred name)
 2. Folder structure exactly as:
 ├── agents/                  # empty for now
 ├── config/
@@ -14,7 +14,7 @@ Everything must be 100% local-first (no Redis, no external services yet).
 │   └── v1/
 │       └── clarifying_pm.jinja   # strong initial clarification prompt (≥300 words)
 ├── phases/                  # this brief will live here
-├── app.py                   # minimal Streamlit UI with title "DevTeam.AI" and a text input box
+├── app.py                   # minimal Streamlit UI with title "AppForge" and a text input box
 ├── requirements.txt         # pinned versions (see list below)
 ├── pyproject.toml           # black + ruff configuration
 ├── .gitignore
@@ -34,7 +34,7 @@ pyyaml
 gitpython
 rich
 text4. `README.md` must contain:
-- Project title "DevTeam.AI – Autonomous Development Team"
+- Project title "AppForge – Autonomous Development Team"
 - One-paragraph vision
 - Local run instructions (pip install -e . → streamlit run app.py)
 - Link to Core Design Document v1.1 (paste full text or link)
@@ -43,9 +43,9 @@ text4. `README.md` must contain:
 (Implementation Agent must copy this verbatim at the end of its patch)
 
 [ ] GitHub repository exists and is clonable (provide URL)  
-[ ] Running `git clone <url> && cd devteam-ai-2025` works  
+[ ] Running `git clone <url> && cd appforge` works  
 [ ] `pip install -e .` completes with zero errors  
-[ ] `streamlit run app.py` launches a browser page showing "DevTeam.AI" title and an input box (no crash)  
+[ ] `streamlit run app.py` launches a browser page showing "AppForge" title and an input box (no crash)  
 [ ] `ruff check .` returns no errors  
 [ ] `black --check .` passes  
 [ ] `.github/workflows/ci.yml` exists and GitHub Actions shows green check within 2 minutes of commit  

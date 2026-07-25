@@ -1,5 +1,5 @@
 """
-DevTeam.AI - Agent Module
+AppForge - Agent Module
 
 This module contains all agent implementations for the autonomous development team.
 Agents are added in phases as the system evolves.

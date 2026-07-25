@@ -1,5 +1,5 @@
 """
-DevTeam.AI - BudgetGuard Agent
+AppForge - BudgetGuard Agent
 Phase 2: Cost Enforcement and Model Downgrading
 
 BudgetGuard monitors spending, enforces budget thresholds, and can

@@ -1,4 +1,4 @@
-# AI Development Team Orchestrator – “DevTeam.AI”  
+# AI Development Team Orchestrator – “AppForge”  
 **Core Design Document v1.1** (Updated December 2025)
 
 ### Vision

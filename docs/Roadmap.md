@@ -16,6 +16,6 @@
 | 11    | Full Open-Source Eco Mode                                     | Same Todo MVC built with zero proprietary calls (opt-in)       | SQLite + local LLMs only                         |
 | 12    | Production Ship + Handover                                    | Production URL, admin creds, final cost report                |                                                  |
 | 13    | Self-Improvement Loop (optional DSPy optimiser)               | Measurable speed/quality gain after 3 feedback cycles          |                                                  |
-| 14    | Public Template Release                                       | “Use this template” button + full docs → anyone has their own DevTeam.AI in <5 min | One-click fork                                   |
+| 14    | Public Template Release                                       | “Use this template” button + full docs → anyone has their own AppForge in <5 min | One-click fork                                   |
 
 All phases remain 100% human-testable with zero coding required.

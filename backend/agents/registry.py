@@ -1,5 +1,5 @@
 """
-DevTeam.AI - Agent Registry
+AppForge - Agent Registry
 Phase 2: Hot-swappable Agent Framework
 
 The AgentRegistry loads agent configurations from YAML, instantiates agents,
