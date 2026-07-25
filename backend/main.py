@@ -10,7 +10,9 @@ import asyncio
 import contextlib
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import socketio
 import structlog
@@ -44,6 +46,20 @@ _runs: dict[str, dict[str, Any]] = {}  # project_id -> {handle, idea, poller, pr
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _run_db_path() -> str:
+    """A distinct SQLite file for every run.
+
+    Each start_run boots its own state-server PROCESS, and the store's
+    single-writer guarantee is an in-process asyncio.Lock — it serialises
+    nothing across processes. Pointing two live runs at one file therefore puts
+    two OS writers on it, which surfaces as "database is locked" out of
+    claim_next_task and gets laundered into task retries that can fail the run.
+    APPFORGE_WEB_DB names the base path; each run takes a unique sibling of it.
+    """
+    base = Path(os.getenv("APPFORGE_WEB_DB", "data/web.db"))
+    return str(base.with_name(f"{base.stem}-{uuid4().hex}{base.suffix}"))
 
 
 async def _poll_and_emit(project_id: str, room: str) -> None:
@@ -96,7 +112,7 @@ async def start_project(sid, data):
         idea,
         workers=4,
         budget_limit=200.0,
-        db_path=os.getenv("APPFORGE_WEB_DB", "data/web.db"),
+        db_path=_run_db_path(),
     )
     project_id = handle.run_id
     room = f"project:{project_id}"
