@@ -6,6 +6,7 @@ import asyncio
 import json
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import aiosqlite
@@ -38,6 +39,13 @@ class Store:
         return time.time()
 
     async def connect(self) -> None:
+        # sqlite will not create missing intermediate directories: the default
+        # paths live under data/, which is gitignored and therefore absent on a
+        # fresh clone or CI runner. Without this, connect() raises
+        # "unable to open database file".
+        parent = Path(self.db_path).parent
+        if str(parent) not in ("", "."):
+            parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self.db_path)
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")

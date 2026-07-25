@@ -17,8 +17,8 @@ The engine is done, tested, documented, and published under MIT. There is no in-
 
 | Signal | State |
 |---|---|
-| Backend suite | **152 passed** (`uv run pytest tests/`) |
-| Coverage | **86.93%** (gate: 70%) |
+| Backend suite | **155 passed** (`uv run pytest tests/`) |
+| Coverage | **86.96%** (gate: 70%) |
 | Frontend suite | **28 passed** across 6 files (`cd frontend && npm test`) |
 | Lint / format | `ruff check` clean · `black --check` clean (66 files) |
 | Version | `pyproject.toml` 1.0.0 · `frontend/package.json` 1.0.0 · `backend/main.py` FastAPI 1.0.0 |
@@ -57,6 +57,16 @@ None required — the project is feature-frozen at 1.0. If it is picked up again
 
 ## Session log
 
+### 2026-07-25 — fix: the engine could not start on a fresh clone
+
+`Store.connect()` called `aiosqlite.connect(db_path)` without creating the directory holding the file. sqlite does not create missing intermediate directories, and the default paths (`data/engine.db`, `data/web.db`) live under `data/`, which is gitignored and therefore absent on any fresh clone or CI runner — so the engine died with `OperationalError: unable to open database file`.
+
+- This was **red on `main`**: CI `backend (3.11)` failed `test_start_project_emits_project_created`, and the `e2e` job's web server threw the same error repeatedly.
+- It survived local verification because every store test builds its path under pytest's `tmp_path`, which already exists, and because a developer who has ever run the engine has a `data/` directory. Confirmed by A/B: with `data/` removed, the failing CI test reproduces exactly, and passes with the fix.
+- Fixed at the single point every caller passes through, plus `tests/engine/test_store_db_path.py` covering the missing parent, nested parents, and a bare filename (which must not trip the mkdir).
+- Backend suite **152 → 155**; full suite verified with `data/` absent.
+- **State delta:** `git clone && uv run appforge run "…"` now works on a machine that has never run AppForge.
+
 ### 2026-07-25 — v1.0 follow-ups: working CLI, honest dependencies, dead config removed
 
 Closed the three loose ends the release stamp surfaced.
@@ -70,7 +80,7 @@ Closed the three loose ends the release stamp surfaced.
 ### 2026-07-25 — v1.0.0 release stamp
 
 - Bumped `pyproject.toml` to `1.0.0` and its classifier from `3 - Alpha` to `5 - Production/Stable`; bumped `frontend/package.json` from `0.0.0` to `1.0.0` (`backend/main.py` already declared 1.0.0).
-- Verified the release state before stamping it: 154 backend tests passed, 86.93% coverage, 28 frontend tests passed, ruff and black clean.
+- Verified the release state before stamping it: 154 backend tests passed, 86.96% coverage, 28 frontend tests passed, ruff and black clean.
 - Created this canonical `docs/STATUS.md`, superseding the dated `Status-*.md` snapshots (which describe the retired LangGraph architecture).
 - Marked the project **complete for now** in `README.md` and replaced the stale "Active session pickup" block in `CLAUDE.md`, which still pointed sessions at `Status-2026_06_02.md` and Phase 6 work that the engine rewrite made moot.
 - **State delta:** unversioned work-in-progress → feature-frozen v1.0.0 with a single accurate status entry point.
