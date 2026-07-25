@@ -68,23 +68,26 @@ async def start_run(
         raise RuntimeError("state server failed to start")
 
     # spawn worker subprocesses
-    procs = []
-    for i in range(workers):
-        procs.append(
-            await asyncio.create_subprocess_exec(
-                sys.executable,
-                "-m",
-                "backend.engine.worker",
-                "--server-url",
-                url,
-                "--run-id",
-                run_id,
-                "--worker-id",
-                f"w{i}",
+    handle = RunHandle(run_id=run_id, url=url, procs=[], server_task=server_task)
+    try:
+        for i in range(workers):
+            handle.procs.append(
+                await asyncio.create_subprocess_exec(
+                    sys.executable,
+                    "-m",
+                    "backend.engine.worker",
+                    "--server-url",
+                    url,
+                    "--run-id",
+                    run_id,
+                    "--worker-id",
+                    f"w{i}",
+                )
             )
-        )
-
-    return RunHandle(run_id=run_id, url=url, procs=procs, server_task=server_task)
+    except BaseException:
+        await stop_run(handle)  # terminate spawned procs + cancel/await server task
+        raise
+    return handle
 
 
 async def stop_run(handle: RunHandle) -> None:
