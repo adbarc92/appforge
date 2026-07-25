@@ -12,19 +12,10 @@ on win32 for the WAL files).
 from __future__ import annotations
 
 import asyncio
-import socket
 import threading
 from contextlib import asynccontextmanager
 
-from backend.engine.state_server import build_server
-
-
-def free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
+from backend.engine.state_server import build_server, free_port
 
 
 class _ServerThread:
