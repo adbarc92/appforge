@@ -57,6 +57,11 @@ class Config:
     sqlite_path: str
     max_clarifying_questions: int
     enable_phase4: bool
+    engine_lease_ttl: float = 120.0
+    engine_heartbeat_interval: float = 20.0
+    engine_reaper_interval: float = 30.0
+    engine_worker_count: int = 4
+    engine_max_attempts: int = 3
     agents_yaml: dict[str, Any] = field(default_factory=dict)
     budget_yaml: dict[str, Any] = field(default_factory=dict)
     llm_yaml: dict[str, Any] = field(default_factory=dict)
@@ -74,6 +79,11 @@ class Config:
             sqlite_path=os.getenv("SQLITE_PATH", default_sqlite),
             max_clarifying_questions=_env_int("MAX_CLARIFYING_QUESTIONS", 6),
             enable_phase4=_env_bool("ENABLE_PHASE4", True),
+            engine_lease_ttl=_env_float("ENGINE_LEASE_TTL", 120.0),
+            engine_heartbeat_interval=_env_float("ENGINE_HEARTBEAT_INTERVAL", 20.0),
+            engine_reaper_interval=_env_float("ENGINE_REAPER_INTERVAL", 30.0),
+            engine_worker_count=_env_int("ENGINE_WORKER_COUNT", 4),
+            engine_max_attempts=_env_int("ENGINE_MAX_ATTEMPTS", 3),
             agents_yaml=_load_yaml(CONFIG_DIR / "agents.yaml"),
             budget_yaml=_load_yaml(CONFIG_DIR / "budget.yaml"),
             llm_yaml=_load_yaml(CONFIG_DIR / "llm.yaml"),

@@ -1,0 +1,47 @@
+# Source of truth for the six-phase dependency graph.
+# depends_on lists refer to OTHER agent ids WITHIN the same phase.
+phases:
+  - name: clarify
+    order: 0
+    gate: prd
+    agents:
+      clarifying_pm: { reads: [idea], writes: prd, sim_cost: 0.30, depends_on: [] }
+  - name: design
+    order: 1
+    gate: plan
+    agents:
+      solution_architect: { reads: [prd], writes: adr, sim_cost: 0.50, depends_on: [] }
+      tech_lead:          { reads: [prd], writes: tasks, sim_cost: 0.40, depends_on: [] }
+      uiux_designer:      { reads: [prd], writes: design_spec, sim_cost: 0.40, depends_on: [] }
+  - name: code
+    order: 2
+    gate: none
+    agents:
+      database: { reads: [adr, tasks], writes: db_schema, sim_cost: 0.60, depends_on: [] }
+      backend:  { reads: [adr, tasks, db_schema], writes: backend_code, sim_cost: 0.80, depends_on: [database] }
+      frontend: { reads: [design_spec, backend_code], writes: frontend_code, sim_cost: 0.80, depends_on: [backend] }
+      ai_ml:    { reads: [adr], writes: ml_code, sim_cost: 0.50, depends_on: [] }
+  - name: test
+    order: 3
+    gate: none
+    agents:
+      qa_test:  { reads: [backend_code, frontend_code], writes: test_report, sim_cost: 0.50, depends_on: [] }
+      security: { reads: [backend_code], writes: security_report, sim_cost: 0.50, depends_on: [] }
+  - name: deploy
+    order: 4
+    gate: none
+    agents:
+      devops:           { reads: [backend_code, frontend_code], writes: deploy_manifest, sim_cost: 0.40, depends_on: [] }
+      technical_writer: { reads: [prd, adr], writes: docs, sim_cost: 0.30, depends_on: [] }
+  - name: iterate
+    order: 5
+    gate: none
+    agents:
+      delivery_summarizer: { reads: [test_report, deploy_manifest], writes: summary, sim_cost: 0.20, depends_on: [] }
+
+# Non-phase-worker roles, recorded so the 16-agent count reconciles honestly.
+infra_roles:
+  orchestrator: "engine / scheduler / state server"
+  budget_guard: "per-claim budget enforcement hook"
+inline_roles:
+  product_owner: "auto-answerer inside the clarify task (not an independent claimant)"

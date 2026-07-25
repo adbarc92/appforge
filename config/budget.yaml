@@ -138,3 +138,9 @@ logging:
   threshold_crossings: true
   downgrade_events: true
   override_events: true
+
+# Model -> cheaper model. Authoritative (moved out of agents.yaml).
+downgrade_paths:
+  claude-3-5-sonnet-20241022: claude-3-5-haiku-20241022
+  gpt-4o: gpt-4o-mini
+  claude-3-5-haiku-20241022: gpt-4o-mini
