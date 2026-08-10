@@ -9,7 +9,7 @@
 
 **A parallel, MCP-coordinated multi-agent engine that takes a product idea from clarification → design → code → test → deploy → iterate, run by independent worker processes with human approval gates and automatic budget control.**
 
-AppForge models a ~14-person software team as **16 specialized agents** that a scheduler dispatches across a **six-phase dependency graph**. The orchestration is not a single async loop — it is a genuine **MCP state server** plus a pool of **independent OS worker processes** that claim and execute work concurrently, coordinating shared state without collision.
+AppForge models a software team as a roster of **specialized agents** that a scheduler dispatches across a **six-phase dependency graph**. The orchestration is not a single async loop — it is a genuine **MCP state server** plus a pool of **independent OS worker processes** that claim and execute work concurrently, coordinating shared state without collision.
 
 > **Status: v1.0 — complete for now.** The orchestration engine is finished, tested (155 backend + 28 frontend tests, ~87% coverage), and feature-frozen; there is no work in flight. Agents run in a deterministic **mock mode** by default (free, fast, reproducible) with a real-Anthropic mode available; the value here is the *orchestration architecture*, which is real and proven — not a finished app generator. Full detail in [`docs/STATUS.md`](docs/STATUS.md).
 
@@ -170,7 +170,7 @@ The design spec and the phased implementation plans (each built test-first and i
 - **Proven:** the coordination core, multi-process collision-freedom, approval gates, and live budget downgrade — all under test.
 - **Mock by design:** the documented run and tests use mock agents (deterministic, free). Real-Anthropic mode works but isn't required to exercise the architecture; **real token-cost accounting** is the top follow-up (costs are currently simulated, so the downgrade *mechanism* is real while the dollar figures driving it are not).
 - **Single-user web bridge:** the live UI targets local single-user use; multi-tenant lifecycle hardening (per-connection dedup, reconnect durability) is future work.
-- **Historical docs:** `docs/Roadmap.md`, `docs/CoreDesignDocument.md`, and the dated `docs/Status-*.md` files describe the earlier LangGraph-based design that the engine replaced. They are kept as history; [`docs/STATUS.md`](docs/STATUS.md) is the current one.
+- **Historical docs:** `docs/Roadmap.md`, `docs/CoreDesignDocument.md`, and the dated `docs/Status-*.md` files describe an earlier design that this engine replaced. They are kept as history and do not describe what runs today; [`docs/STATUS.md`](docs/STATUS.md) is current.
 
 If the project is picked up again, [`docs/STATUS.md`](docs/STATUS.md) carries the ranked list of what to do first.
 
