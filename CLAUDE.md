@@ -1,5 +1,7 @@
 # CLAUDE.md - AI Assistant Context for AppForge
 
+Read [docs/ROUTER.md](docs/ROUTER.md) first; it routes to every doc.
+
 <!-- BEGIN: ACTIVE-SESSION-PICKUP — remove this block if the project leaves the v1.0 freeze -->
 ## Active session pickup
 
